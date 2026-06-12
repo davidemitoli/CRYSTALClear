@@ -38,7 +38,8 @@ class Crystal_input(Crystal_inputBASE):
             pbc (list[bool]): Valid only if ``keyword = EXTERNAL``. Force to remove
                 periodic boundary conditions along x, y, z axis.
             gui_name (str): Valid only if ``keyword = EXTERNAL``. Gui file's name.
-            **kwargs: Passed to Pymatgen `SpacegroupAnalyzer <https://pymatgen.org/pymatgen.symmetry.html#pymatgen.symmetry.analyzer.SpacegroupAnalyzer>`_ object.
+            #pymatgen.symmetry.analyzer.SpacegroupAnalyzer>`_ object.
+            **kwargs: Passed to Pymatgen `SpacegroupAnalyzer <https://pymatgen.org/pymatgen.symmetry.html
         """
         import re
 
@@ -1444,16 +1445,16 @@ class Crystal_output:
             self.qpoint (list[list[array[float], float]]): A nqpoint\*1 list of
                 2\*1 list whose first element is a 3\*1 array of fractional
                 coordinates and the second is its weight.
-            self.nmodes (int): Number of vibrational modes. 
+            self.nmodes (int): Number of vibrational modes.
             self.frequency (np.array): nqpoint\*nmode array of harmonic vibrational
                 frequency. Unit: THz.
             self.intens (np.array): Harmonic intensity. Unit: km/mol.
-            self.IR (np.array): Boolean values specifying whether the mode is 
+            self.IR (np.array): Boolean values specifying whether the mode is
                 IR active.
-            self.Raman (np.array): Boolean values specifying whether the mode is 
+            self.Raman (np.array): Boolean values specifying whether the mode is
                 Raman active.
-            self.eigenvector (np.array): Valid if ``read_eigvt = True``. 3D 
-                array containing normal modes for each Q point (Q point; normal 
+            self.eigenvector (np.array): Valid if ``read_eigvt = True``. 3D
+                array containing normal modes for each Q point (Q point; normal
                 mode; components). Normalized to 1.
         """
 
@@ -1542,7 +1543,8 @@ class Crystal_output:
                     countline += 1
                     continue
                 countline += 2
-                countline, eigvt = PhononBASE.readmode_eigenvector(self.data[:self.eoo], countline)
+                countline, eigvt = PhononBASE.readmode_eigenvector(
+                    self.data[:self.eoo], countline)
                 self.eigenvector.append(eigvt + 0.j)
 
             # Dispersion: complex numbers
@@ -1554,7 +1556,8 @@ class Crystal_output:
                     self.eigenvector.append(tmp_eigvt)
                 countline += 2
                 found_anti = False
-                countline, tmp_eigvt = PhononBASE.readmode_eigenvector(self.data[:self.eoo], countline)
+                countline, tmp_eigvt = PhononBASE.readmode_eigenvector(
+                    self.data[:self.eoo], countline)
                 tmp_eigvt = tmp_eigvt + 0.j
 
             elif re.match(r'^\s+MODES IN ANTI\-PHASE', line):
@@ -1563,7 +1566,8 @@ class Crystal_output:
                     continue
                 countline += 2
                 found_anti = True
-                countline, eigvt_anti = PhononBASE.readmode_eigenvector(self.data[:self.eoo], countline)
+                countline, eigvt_anti = PhononBASE.readmode_eigenvector(
+                    self.data[:self.eoo], countline)
                 self.eigenvector.append(tmp_eigvt + eigvt_anti * 1.j)
 
             # Other data
@@ -1643,7 +1647,7 @@ class Crystal_output:
     def get_IR(self):
         """
         Extract harmonic IR spectrum from CRYSTAL output.
-        
+
         Returns:
             self.IR_HO_0K (np.array): 2D array containing harmonic IR frequency and intensities computed at 0 K.
         """
@@ -1703,30 +1707,30 @@ class Crystal_output:
 
             if re.match(r'^\s*\d', line):
 
-                if(savePC):
+                if (savePC):
                     ndeg = int(line.split()[1].replace("-", "")) \
-                            - int(line.split()[0].replace("-", "")) \
-                            + 1
+                        - int(line.split()[0].replace("-", "")) \
+                        + 1
                     freq = float(line.split()[2])
-                    intens_tot = float(line.split()[-3]) / ndeg 
-                    intens_par = float(line.split()[-2]) / ndeg 
-                    intens_per = float(line.split()[-1]) / ndeg 
+                    intens_tot = float(line.split()[-3]) / ndeg
+                    intens_par = float(line.split()[-2]) / ndeg
+                    intens_per = float(line.split()[-1]) / ndeg
                     for k in range(ndeg):
-                        self.Ram_HO_0K_tot.append([freq, intens_tot]) 
-                        self.Ram_HO_0K_par.append([freq, intens_par]) 
-                        self.Ram_HO_0K_per.append([freq, intens_per]) 
+                        self.Ram_HO_0K_tot.append([freq, intens_tot])
+                        self.Ram_HO_0K_par.append([freq, intens_par])
+                        self.Ram_HO_0K_per.append([freq, intens_per])
 
-                if(saveSC):
+                if (saveSC):
                     ndeg = int(line.split()[1].replace("-", "")) \
-                            - int(line.split()[0].replace("-", "")) \
-                            + 1
+                        - int(line.split()[0].replace("-", "")) \
+                        + 1
                     freq = float(line.split()[2])
-                    intens_xx = float(line.split()[-6]) / ndeg 
-                    intens_xy = float(line.split()[-5]) / ndeg 
-                    intens_xz = float(line.split()[-4]) / ndeg 
-                    intens_yy = float(line.split()[-3]) / ndeg 
-                    intens_yz = float(line.split()[-2]) / ndeg 
-                    intens_zz = float(line.split()[-1]) / ndeg 
+                    intens_xx = float(line.split()[-6]) / ndeg
+                    intens_xy = float(line.split()[-5]) / ndeg
+                    intens_xz = float(line.split()[-4]) / ndeg
+                    intens_yy = float(line.split()[-3]) / ndeg
+                    intens_yz = float(line.split()[-2]) / ndeg
+                    intens_zz = float(line.split()[-1]) / ndeg
                     for k in range(ndeg):
                         self.Ram_HO_0K_comp_xx.append([freq, intens_xx])
                         self.Ram_HO_0K_comp_xy.append([freq, intens_xy])
@@ -1746,7 +1750,6 @@ class Crystal_output:
         self.Ram_HO_0K_comp_zz = np.array(self.Ram_HO_0K_comp_zz)
 
         return self
-
 
     def get_anh_const(self):
         """
@@ -1816,7 +1819,6 @@ class Crystal_output:
         self.PES_triplet = np.array(PES_triplet)
 
         return self
-
 
     def get_anh_spectra(self):
         """
@@ -2431,7 +2433,7 @@ class Crystal_output:
                 self.harmpot = V[:, 1]
                 # Save index of anscan mode
                 strtmp = self.data[i-1].split()[1]
-                strtmp = strtmp[:strtmp.find('(')]
+                strtmp = strtmp[:strtmp.find()]
                 anhmode = int(strtmp)
             if re.match(r'\s*ANHARMONIC VIBRATIONAL STATES', self.data[i-3]):
                 storeE = True
@@ -2645,16 +2647,20 @@ class Crystal_output:
         # <--
 
         return self
-    
+
     def get_masses(self):
-        import re 
-        
+        '''
+        Docs will be provided shortly
+        '''
+        import re
+
+        # Regex dfinition and use to extract amu -->
         check_freq = ' \* +F+\s+R+ +E+ +Q+(\s+(U\s+)+)E+(\s+(N\s+)+)C+(\s+(Y\s+)+)\*'
         amu_start = ' ATOMS ISOTOPIC MASS \(AMU\)'
         amu_end = ' \*+'
         freq = False
         find_end = False
-        for index,line in enumerate(self.data):
+        for index, line in enumerate(self.data):
             if re.match(check_freq, line):
                 freq = True
 
@@ -2669,35 +2675,236 @@ class Crystal_output:
                         break
 
         amu = self.data[amu_start_index:amu_end_index]
+        # <--
 
+        # Parsing of data to return masses, symbols and isotopes index --> 
         self.symbols = []
         self.masses = []
         self.isotope_indexes = []
         at_mass = []
         for line in amu:
             splitline = line.split()
-            at_mass += [splitline[x: x + 3] for x in range(0, len(splitline), 3)]
+            at_mass += [splitline[x: x + 3]
+                for x in range(0, len(splitline), 3)]
 
         for ls in at_mass:
             if (ls[1] not in self.symbols) and (float(ls[2]) not in self.masses):
                 self.symbols.append(ls[1])
                 self.masses.append(float(ls[2]))
 
-            elif (ls[1] in self.symbols) and (float(ls[2]) not in self.masses): 
+            elif (ls[1] in self.symbols) and (float(ls[2]) not in self.masses):
                 ls[0] = int(ls[0])
                 self.isotope_indexes.append(ls[:1])
                 self.masses.append(float(ls[2]))
 
-
         self.masses_dict = dict(zip(self.symbols, self.masses))
+        # <--
 
         return self
 
-                
+    def get_locmodes(self):
+        '''
+        Docs will be provided shortly
+        '''
+        import re
 
-                    
+        import numpy as np
+        import pandas as pd
 
+        # Definition of the pattern to find -->
+        internal_list_find = '\sN\sOF\sREMAINING\sINTERNAL\sCOORDINATES\sAFTER\sSCREENING:\s+[0-9]+'
+        force_constant_find = '\sNUM\s+K\^A\s+K\^A\(D\)\s+M\^A\s+W\^A'
+        cnm_find = '\sMODE:\|(\s+([0-9]+\s+)+)[0-9]+'
+        end_section = '\s=+'
+        bonds_find = '(L)'
+        angle_find = '(A)'
+        dih_find = '(D)'
+        # <--
 
+        # Vari\able declaration -->
+        internal = False
+        section_end = []
+        cnm_section_start = []
+        bond_start = []
+        angle_start = []
+        dih_start = []
+        # <--
+
+        # Extraction of start and end indexes for different sections -->
+        for index, line in enumerate(self.data):
+            if re.match(internal_list_find, line):
+                internal = True
+                internal_start = index
+                internal_number = int(line.split()[-1])
+
+            if (internal) and (len(line.split()) > 0):
+                if line.split()[0] == bonds_find:
+                    bond_start.append(index)
+                elif line.split()[0] == angle_find:
+                    angle_start.append(index)
+                elif line.split()[0] == dih_find:
+                    dih_start.append(index)
+
+            if (internal) and (re.match(force_constant_find, line)):
+                fc_start = index
+
+            if (internal) and (re.match(end_section, line)) and (self.data[index+1].split() == []):
+                section_end.append(index)
+
+            if (internal) and (re.match(cnm_find, line)):
+                cnm_section_start.append(index)
+        # <--
+
+        # Extraction of bond, angle and dih informations -->
+        bonds = [line.split() for line in self.data[bond_start[0]+1:angle_start[0]]]
+        angle = [line.split() for line in self.data[angle_start[0]+1:dih_start[0]]]
+        dih = [line.split() for line in self.data[dih_start[0]+1:section_end[0]]]
+        # <--
+
+        # Extraction of bond, angle and dih force constants informations -->
+        bonds_fc = [line.split() for line in self.data[bond_start[1]+1:angle_start[1]]]
+        angle_fc = [line.split() for line in self.data[angle_start[1]+1:dih_start[1]]]
+        dih_fc = [line.split() for line in self.data[dih_start[1]+1:section_end[1]]]
+        # <--
+        
+        # Creation of Bonds dataframe
+        for bond in bonds:
+            bond[0] = int(bond[0]) 
+            bond[1] = int(bond[1]) 
+            bond[3] = int(bond[3]) 
+            bond[-2] = float(bond[-2])
+            del bond[5:-2]
+            bond.pop(-1)
+
+        for bond in bonds_fc:
+            for i, j in enumerate(bond):
+                bond[i] = float(j)
+            bond.pop(0)
+
+        for index, bond in enumerate(bonds):
+            bonds[index] = bond + bonds_fc[index]
+
+        self.bonds = pd.DataFrame(bonds, columns=['ic index',
+                                                  'Atom 1 label', 
+                                                  'Atom 1', 
+                                                  'Atom 2 label', 
+                                                  'Atom 2',
+                                                  'Bond Length',
+                                                  'k^a',
+                                                  'm^a',
+                                                  'w^a'])
+        # <--
+
+        # Creation of Bonds dataframe
+        for ang in angle:
+            opening = [i  for i, n in enumerate(ang) if n.startswith('(')]
+            ending = [i for i, n in enumerate(ang) if n.endswith(')')]
+            ang[0] = int(ang[0]) 
+            ang[1] = int(ang[1]) 
+            ang[3] = int(ang[3]) 
+            ang[ending[0]+1] = int(ang[ending[0]+1])
+            ang[-2] = float(ang[-2])
+            opening.sort(reverse=True)
+            ending.sort(reverse=True)
+            for i, j in enumerate(opening):
+                if j != ending[i]:
+                    del ang[j:ending[i]+1]
+                else:
+                    ang.pop(j)
+            ang.pop(-1)
+
+        for ang in angle_fc:
+            for i, j in enumerate(ang):
+                ang[i] = float(j)
+            ang.pop(0)
+
+        for index, ang in enumerate(angle):
+            angle[index] = ang + angle_fc[index]
+
+        self.angle = pd.DataFrame(angle, columns=['ic index',
+                                                  'Atom 1 label', 
+                                                  'Atom 1', 
+                                                  'Atom 2 label', 
+                                                  'Atom 2',
+                                                  'Atom 3 label',
+                                                  'Atom 3',
+                                                  'Angle',
+                                                  'k^a',
+                                                  'k^a(d)',
+                                                  'm^a',
+                                                  'w^a'])
+        # <--
+
+        # Creation of Bonds dataframe
+        for d in dih:
+            opening = [i  for i, n in enumerate(d) if n.startswith('(')]
+            ending = [i for i, n in enumerate(d) if n.endswith(')')]
+            d[0] = int(d[0]) 
+            d[1] = int(d[1]) 
+            d[3] = int(d[3]) 
+            d[ending[0]+1] = int(d[ending[0]+1])
+            d[ending[1]+1] = int(d[ending[1]+1])
+            d[-2] = float(d[-2])
+            opening.sort(reverse=True)
+            ending.sort(reverse=True)
+            for i, j in enumerate(opening):
+                if j != ending[i]:
+                    del d[j:ending[i]+1]
+                else:
+                    d.pop(j)
+            d.pop(-1)
+
+        for d in dih_fc:
+            for i, j in enumerate(d):
+                d[i] = float(j)
+            d.pop(0)
+
+        for index, d in enumerate(dih):
+            dih[index] = d + dih_fc[index]
+
+        self.dih = pd.DataFrame(dih, columns=['ic index',
+                                              'Atom 1 label', 
+                                              'Atom 1', 
+                                              'Atom 2 label', 
+                                              'Atom 2',
+                                              'Atom 3 label',
+                                              'Atom 3',
+                                              'Atom 4 label',
+                                              'Atom 4',
+                                              'Angle',
+                                              'k^a',
+                                              'k^a(d)',
+                                              'm^a',
+                                              'w^a'])
+        # <--
+
+        # Extraction of CNM data -->
+        cnm = []
+        for index, i in enumerate(cnm_section_start):
+            cnm_tmp = [line.split() for line in self.data[i+2:i+internal_number+2]]
+            for k in cnm_tmp:
+                if index != 0:
+                    del k[0:2]
+                    for j, el in enumerate(k):
+                        k[j] = float(el)
+            
+                else:
+                    k[0] = int(k[0])
+                    for j, el in enumerate(k):
+                        if j >= 2:
+                            k[j] = float(el)
+                    k.pop(1)
+            
+            cnm += [cnm_tmp]
+            
+        for index, section in enumerate(cnm):
+            if index > 0:
+                for idx, element in enumerate(section):
+                    cnm[0][idx] += element 
+
+        self.cnm = pd.DataFrame(cnm[0])
+
+        return(self)
 
 
 class Properties_input:
@@ -2710,8 +2917,10 @@ class Properties_input:
 
     def from_file(self, input_name):
         """
-        Read the properties input from a file.
-
+        Read the prope
+        fo
+        forrrties input from a file.
+ 
         Args:
             input_name (str): Name of the input file.
         Returns:
@@ -3924,22 +4133,22 @@ class Properties_output:
         properties = ["type", "coord", "rho", "grho", "lap",
                       "kinetic_g", "kinetic_k", "virial", "elf",
                       "eigenval", "eigenvec", "ellip", "atom_a_id",
-                      "atom_a_cell" ,"atom_a_z", "atom_b_id",
-                      "atom_b_cell" ,"atom_b_z", "bp_length",
+                      "atom_a_cell" , "atom_a_z", "atom_b_id",
+                      "atom_b_cell" , "atom_b_z", "bp_length",
                       "distance_ab", "bp/dist"]
 
         self.topo_df = pd.DataFrame(columns=properties)
-        self.nuclei_df = pd.DataFrame(columns=['z','coord'])
+        self.nuclei_df = pd.DataFrame(columns=['z', 'coord'])
 
         atom_a_read = False
         bp_step = False
 
         file_lines = len(self.data)
         i = 0
-        while  i < file_lines:
+        while i < file_lines:
             line = self.data[i]
 
-            if re.match(r' DIRECT LATTICE VECTOR COMPONENTS .ANGSTROM.',line) != None:
+            if re.match(r' DIRECT LATTICE VECTOR COMPONENTS .ANGSTROM.', line) != None:
                 unitcell_mat = [self.data[i+1].strip().split(),
                                 self.data[i+2].strip().split(),
                                 self.data[i+3].strip().split()]
@@ -3951,16 +4160,16 @@ class Properties_output:
 
             if re.match(r'   ATOM N.AT.  SHELL', line) != None:
                 i += 1
-                for n_atom in range(1,num_atoms+1):
+                for n_atom in range(1, num_atoms+1):
                     atom_data = self.data[i+n_atom].strip().split()
-                    self.nuclei_df.loc[n_atom,'z'] = int(atom_data[1])
-                    self.nuclei_df.loc[n_atom,'coord'] = np.array(atom_data[4:7],dtype=float)
+                    self.nuclei_df.loc[n_atom, 'z'] = int(atom_data[1])
+                    self.nuclei_df.loc[n_atom, 'coord'] = np.array(atom_data[4:7],dtype=float)
                 i += num_atoms
 
-            if re.match(r' SEARCH OF BOND PATH',line) != None:
+            if re.match(r' SEARCH OF BOND PATH', line) != None:
                 bp_step = True
 
-            if re.match(r' CP N.',line) != None:
+            if re.match(r' CP N.', line) != None:
                 if bp_step == False:
                     crit_point_line = i
                     crit_point_number = line.strip().split()[2]
@@ -3977,35 +4186,40 @@ class Properties_output:
                     cp_kener = self.data[crit_point_line+6].strip().split()[5:]
                     cp_virial = self.data[crit_point_line+7].strip().split()[3]
                     cp_elf = self.data[crit_point_line+8].strip().split()[2]
-                    eigenval = self.data[crit_point_line+12].strip().split()[5:]
+                    eigenval = self.data[crit_point_line+ \
+                        12].strip().split()[5:]
                     eigenvec = []
-                    eigenvec.append(self.data[crit_point_line+13].strip().split()[2:])
-                    eigenvec.append(self.data[crit_point_line+14].strip().split())
-                    eigenvec.append(self.data[crit_point_line+15].strip().split())
+                    eigenvec.append(
+                        self.data[crit_point_line+13].strip().split()[2:])
+                    eigenvec.append(
+                        self.data[crit_point_line+14].strip().split())
+                    eigenvec.append(
+                        self.data[crit_point_line+15].strip().split())
 
                     # To skip already filtered lines
-                    i+= 14
+                    i += 14
 
                     # Only bond cp has ellipticity calculated
                     if cp_type == "(3,-1)":
-                        ellip = self.data[crit_point_line+17].strip().split()[2]
+                        ellip = self.data[crit_point_line+ \
+                            17].strip().split()[2]
                         i += 1
                     else:
                         ellip = 0
 
                     # Populating the dataframe
-                    self.topo_df.loc[crit_point_number,'type'] = cp_type
-                    self.topo_df.loc[crit_point_number,'coord'] = np.array(cp_coord, dtype=float)
-                    self.topo_df.loc[crit_point_number,'rho'] = float(cp_prop[0])
-                    self.topo_df.loc[crit_point_number,'grho'] = float(cp_prop[1])
-                    self.topo_df.loc[crit_point_number,'lap'] = float(cp_prop[2])
-                    self.topo_df.loc[crit_point_number,'kinetic_g'] = float(cp_kener[0])
-                    self.topo_df.loc[crit_point_number,'kinetic_k'] = float(cp_kener[1])
-                    self.topo_df.loc[crit_point_number,'virial'] = float(cp_virial)
-                    self.topo_df.loc[crit_point_number,'elf'] = float(cp_elf)
-                    self.topo_df.loc[crit_point_number,'eigenval'] = np.array(eigenval, dtype=float)
-                    self.topo_df.loc[crit_point_number,'eigenvec'] = np.array(eigenvec, dtype=float)
-                    self.topo_df.loc[crit_point_number,'ellip'] = float(ellip)
+                    self.topo_df.loc[crit_point_number, 'type'] = cp_type
+                    self.topo_df.loc[crit_point_number, 'coord'] = np.array(cp_coord, dtype=float)
+                    self.topo_df.loc[crit_point_number, 'rho'] = float(cp_prop[0])
+                    self.topo_df.loc[crit_point_number, 'grho'] = float(cp_prop[1])
+                    self.topo_df.loc[crit_point_number, 'lap'] = float(cp_prop[2])
+                    self.topo_df.loc[crit_point_number, 'kinetic_g'] = float(cp_kener[0])
+                    self.topo_df.loc[crit_point_number, 'kinetic_k'] = float(cp_kener[1])
+                    self.topo_df.loc[crit_point_number, 'virial'] = float(cp_virial)
+                    self.topo_df.loc[crit_point_number, 'elf'] = float(cp_elf)
+                    self.topo_df.loc[crit_point_number, 'eigenval'] = np.array(eigenval, dtype=float)
+                    self.topo_df.loc[crit_point_number, 'eigenvec'] = np.array(eigenvec, dtype=float)
+                    self.topo_df.loc[crit_point_number, 'ellip'] = float(ellip)
 
                 else:
                     # ecrit stands for extra critical point, li
@@ -4016,21 +4230,22 @@ class Properties_output:
                         break
 
                     cp_type = self.data[ecrit_point_line+3].strip().split()[4]
-                    cp_coord = self.data[ecrit_point_line+4].strip().split()[5:]
+                    cp_coord = self.data[ecrit_point_line+ \
+                        4].strip().split()[5:]
                     if self.data[ecrit_point_line+5].strip().split()[1] == 'FRACT.':
                         ecrit_point_line += 1
                         i += 1
                     cp_prop = self.data[ecrit_point_line+5].strip().split()[3:]
 
                     # Populating DF
-                    self.topo_df.loc[ecrit_point_number,'type'] = cp_type
-                    self.topo_df.loc[ecrit_point_number,'coord'] = np.array(cp_coord, dtype=float)
-                    self.topo_df.loc[ecrit_point_number,'rho'] = float(cp_prop[0])
-                    self.topo_df.loc[ecrit_point_number,'grho'] = float(cp_prop[1])
-                    self.topo_df.loc[ecrit_point_number,'lap'] = float(cp_prop[2])
+                    self.topo_df.loc[ecrit_point_number, 'type'] = cp_type
+                    self.topo_df.loc[ecrit_point_number, 'coord'] = np.array(cp_coord, dtype=float)
+                    self.topo_df.loc[ecrit_point_number, 'rho'] = float(cp_prop[0])
+                    self.topo_df.loc[ecrit_point_number, 'grho'] = float(cp_prop[1])
+                    self.topo_df.loc[ecrit_point_number, 'lap'] = float(cp_prop[2])
 
             # Data of first attractor associated to BCP
-            if ((re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ',line) != None) and
+            if ((re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ', line) != None) and
                     bp_step and
                     (not atom_a_read)):
                 atom_a_read = True
@@ -4047,7 +4262,7 @@ class Properties_output:
                     atom_a_z = atom_a_data[2]
 
             # Data of second attractor associated to BCP
-            elif (re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ',line) != None and
+            elif (re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ', line) != None and
                     bp_step and
                     atom_a_read):
                 atom_a_read = False
@@ -4063,22 +4278,22 @@ class Properties_output:
                     atom_b_cell = []
                     atom_b_z = atom_b_data[2]
 
-            if re.match(r' BPL',line) != None:
+            if re.match(r' BPL', line) != None:
                 bp_step = False
                 bp_length = line.strip().split()[7]
                 distance_ab = line.strip().split()[8]
                 bp_dist_ratio = line.strip().split()[9]
 
                 # Populating info for atoms involved in bond CPs
-                self.topo_df.loc[crit_point_number,'atom_a_id'] = int(atom_a_id)
-                self.topo_df.loc[crit_point_number,'atom_a_cell'] = np.array(atom_a_cell, dtype=float)
-                self.topo_df.loc[crit_point_number,'atom_a_z'] = int(atom_a_z)
-                self.topo_df.loc[crit_point_number,'atom_b_id'] = int(atom_b_id)
-                self.topo_df.loc[crit_point_number,'atom_b_cell'] = np.array(atom_b_cell, dtype=float)
-                self.topo_df.loc[crit_point_number,'atom_b_z'] = int(atom_b_z)
-                self.topo_df.loc[crit_point_number,'bp_length'] = float(bp_length)
-                self.topo_df.loc[crit_point_number,'distance_ab'] = float(distance_ab)
-                self.topo_df.loc[crit_point_number,'bp/dist'] = float(bp_dist_ratio)
+                self.topo_df.loc[crit_point_number, 'atom_a_id'] = int(atom_a_id)
+                self.topo_df.loc[crit_point_number, 'atom_a_cell'] = np.array(atom_a_cell, dtype=float)
+                self.topo_df.loc[crit_point_number, 'atom_a_z'] = int(atom_a_z)
+                self.topo_df.loc[crit_point_number, 'atom_b_id'] = int(atom_b_id)
+                self.topo_df.loc[crit_point_number, 'atom_b_cell'] = np.array(atom_b_cell, dtype=float)
+                self.topo_df.loc[crit_point_number, 'atom_b_z'] = int(atom_b_z)
+                self.topo_df.loc[crit_point_number, 'bp_length'] = float(bp_length)
+                self.topo_df.loc[crit_point_number, 'distance_ab'] = float(distance_ab)
+                self.topo_df.loc[crit_point_number, 'bp/dist'] = float(bp_dist_ratio)
 
             # Next line iterator
             i += 1
@@ -4108,79 +4323,80 @@ class Properties_output:
 
         from ase import Atoms
 
-        if not hasattr(self,'topo_df'):
-            print('ERROR: You need first to succesfully run read_topond_trho() to use this.')
+        if not hasattr(self, 'topo_df'):
+            print(
+                'ERROR: You need first to succesfully run read_topond_trho() to use this.')
             sys.exit(1)
 
          # An ASE object is used as intermediate to generate different types of outputs
         if cp_type == 'ALL':
-            if hasattr(self,'unitcell_mat'):
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(self.topo_df['type']),
-                    positions = list(self.topo_df['coord']*0.529177), # factor for Bohr2Angs
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(self.topo_df['type']),
+                    positions= list(self.topo_df['coord']*0.529177), # factor for Bohr2Angs
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(self.topo_df['type']),
-                    positions = list(self.topo_df['coord']*0.529177)
+                    symbols= ["X"] * len(self.topo_df['type']),
+                    positions= list(self.topo_df['coord']*0.529177)
                 )
         elif cp_type == 'BCP':
-            df_bcp =  self.topo_df[self.topo_df['type']=='(3,-1)']
-            if hasattr(self,'unitcell_mat'):
+            df_bcp =  self.topo_df[self.topo_df['type'] == '(3,-1)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_bcp['type']),
-                    positions = list(df_bcp['coord']*0.529177),
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_bcp['type']),
+                    positions= list(df_bcp['coord']*0.529177),
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_bcp['type']),
-                    positions = list(df_bcp['coord']*0.529177)
+                    symbols= ["X"] * len(df_bcp['type']),
+                    positions= list(df_bcp['coord']*0.529177)
                 )
         elif cp_type == 'RCP':
-            df_rcp =  self.topo_df[self.topo_df['type']=='(3,1)']
-            if hasattr(self,'unitcell_mat'):
+            df_rcp =  self.topo_df[self.topo_df['type'] == '(3,1)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_rcp['type']),
-                    positions = list(df_rcp['coord']*0.529177),
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_rcp['type']),
+                    positions= list(df_rcp['coord']*0.529177),
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_rcp['type']),
-                    positions = list(df_rcp['coord']*0.529177)
+                    symbols= ["X"] * len(df_rcp['type']),
+                    positions= list(df_rcp['coord']*0.529177)
                 )
         elif cp_type == 'CCP':
-            df_ccp =  self.topo_df[self.topo_df['type']=='(3,3)']
-            if hasattr(self,'unitcell_mat'):
+            df_ccp =  self.topo_df[self.topo_df['type'] == '(3,3)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_ccp['type']),
-                    positions = list(df_ccp['coord'] * 0.529177),
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_ccp['type']),
+                    positions= list(df_ccp['coord'] * 0.529177),
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_ccp['type']),
-                    positions = list(df_ccp['coord'] * 0.529177)
+                    symbols= ["X"] * len(df_ccp['type']),
+                    positions= list(df_ccp['coord'] * 0.529177)
                 )
         elif cp_type == 'NNA':
-            df_nna =  self.topo_df[self.topo_df['type']=='(3,-3)']
-            if hasattr(self,'unitcell_mat'):
+            df_nna =  self.topo_df[self.topo_df['type'] == '(3,-3)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_nna['type']),
-                    positions = list(df_nna['coord'] * 0.529177), # factor for Bohr2Angs
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_nna['type']),
+                    positions= list(df_nna['coord'] * 0.529177), # factor for Bohr2Angs
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_nna['type']),
-                    positions = list(df_nna['coord'] * 0.529177)
+                    symbols= ["X"] * len(df_nna['type']),
+                    positions= list(df_nna['coord'] * 0.529177)
                 )
 
         if add_atoms:
@@ -4188,12 +4404,13 @@ class Properties_output:
                 ase_obj.append(self.nuclei_df.loc[i + 1, 'z'])
                 ase_obj.positions[-1] = self.nuclei_df.loc[i + 1, 'coord']
 
-        ase_obj.write(self.topo_filename + '_' + cp_type + '.' +file_type)
-        print(self.topo_filename + '_' + cp_type + '.' + file_type + " generated.")
+        ase_obj.write(self.topo_filename + '_' + cp_type + '.' + file_type)
+        print(self.topo_filename + '_' + cp_type + \
+              '.' + file_type + " generated.")
 
         return ase_obj
-    
-    def read_topond_tlap(self,properties_output):
+
+    def read_topond_tlap(self, properties_output):
         """Read the TOPOND TLAP run output file to create associated DataFrames:
          * Coordinates for the nuclei at the unitcell (nuclei_df)
          * Data of the laplacian critical points (CP) discoverd (tlap_df)
@@ -4212,23 +4429,23 @@ class Properties_output:
 
         self.tlap_filename = str(properties_output).split('.')[0]
 
-        properties = ["central_atom_id","central_atom_type","type", "coord", "rho", "grho", "-lap",
-                    "kinetic_g", "kinetic_k", "virial", "elf",
-                    "eigenval", "eigenvec"] 
-                  # To be included. Attr stands for attractor.
-                  # "attr_a_id","attr_a_cell" ,"attr_a_z", 
-                  # "attr_b_id", "attr_b_cell" ,"attr_b_z", 
-                  # "bp_length", "distance_ab", "bp/dist"]
+        properties = ["central_atom_id", "central_atom_type","type", "coord", "rho", "grho", "-lap",
+                      "kinetic_g", "kinetic_k", "virial", "elf",
+                    "eigenval", "eigenvec"]
+                 # To be included. Attr stands for attractor.
+                  # "attr_a_id","attr_a_cell" ,"attr_a_z",
+                  # "attr_b_id", "attr_b_cell" ,"attr_b_z",
+                 # "bp_length", "distance_ab", "bp/dist"]
 
         self.tlap_df = pd.DataFrame(columns=properties)
         self.tlap_df['eigenval'] = self.tlap_df['eigenval'].astype(object)
         self.tlap_df['eigenvec'] = self.tlap_df['eigenvec'].astype(object)
-    
+
         # To be included
         # self.topo_df['attr_a_cell'] = self.topo_df['atom_a_cell'].astype(object)
         # self.topo_df['attr_b_cell'] = self.topo_df['atom_b_cell'].astype(object)
 
-        self.nuclei_df = pd.DataFrame(columns=['z','coord'])
+        self.nuclei_df = pd.DataFrame(columns=['z', 'coord'])
 
         atom_a_read = False
         bp_steps = 0
@@ -4238,68 +4455,71 @@ class Properties_output:
 
         file_lines = len(self.data)
         i = 0
-        while  i < file_lines:
+        while i < file_lines:
             line = self.data[i]
 
-            if re.match(r' DIRECT LATTICE VECTOR COMPONENTS .ANGSTROM.',line) != None:
+            if re.match(r' DIRECT LATTICE VECTOR COMPONENTS .ANGSTROM.', line) != None:
                 unitcell_mat = [self.data[i+1].strip().split(),
                                 self.data[i+2].strip().split(),
                                 self.data[i+3].strip().split()]
                 self.unitcell_mat = np.array(unitcell_mat, dtype=float)
                 i += 3
-        
+
             if re.match(r' N. OF ATOMS PER CELL', line) != None:
                 num_atoms = int(line.strip().split()[5])
 
             if re.match(r'   ATOM N.AT.  SHELL', line) != None:
                 i += 1
-                for n_atom in range(1,num_atoms+1):
+                for n_atom in range(1, num_atoms+1):
                     atom_data = self.data[i+n_atom].strip().split()
-                    self.nuclei_df.loc[n_atom,'z'] = int(atom_data[1])
-                    self.nuclei_df.loc[n_atom,'coord'] = np.array(atom_data[4:7],dtype=float)
+                    self.nuclei_df.loc[n_atom, 'z'] = int(atom_data[1])
+                    self.nuclei_df.loc[n_atom, 'coord'] = np.array(atom_data[4:7],dtype=float)
                 i += num_atoms
-            
-            if re.match(r' ATTRACTORS OF THE UNIQUE PAIRS',line) != None:
+
+            if re.match(r' ATTRACTORS OF THE UNIQUE PAIRS', line) != None:
                 bp_steps = 2
 
-            if re.match(r' \*\*\*\*\*\* CP SEARCH FOR NON',line) != None:
+            if re.match(r' \*\*\*\*\*\* CP SEARCH FOR NON', line) != None:
                 c_atom = line.strip().split()[6:8]
 
-            if re.match(r' CP N.',line) != None:
+            if re.match(r' CP N.', line) != None:
                 global_cp_id += 1
                 if not bp_steps:
-                    bp_cp_id +=1
+                    bp_cp_id += 1
                     crit_point_line = i
                     crit_point_number = line.strip().split()[2]
 
                     if crit_point_number == "X(ANG)":
                         break
-            
+
                     cp_type = self.data[crit_point_line+3].strip().split()[3]
                     cp_coord = self.data[crit_point_line+4].strip().split()[5:]
                     if self.data[crit_point_line+5].strip().split()[1] == 'FRACT.':
                         crit_point_line += 1
                         i += 1
                     cp_prop = self.data[crit_point_line+5].strip().split()[3:]
-                    self.tlap_df.loc[global_cp_id,'central_atom_id'] = c_atom[0]
-                    self.tlap_df.loc[global_cp_id,'central_atom_type'] = c_atom[1]
-                    self.tlap_df.loc[global_cp_id,'type'] = cp_type
-                    self.tlap_df.at[global_cp_id,'coord'] = np.array(cp_coord, dtype=float)
-                    self.tlap_df.loc[global_cp_id,'rho'] = float(cp_prop[2])
-                    self.tlap_df.loc[global_cp_id,'grho'] = float(cp_prop[1])
-                    self.tlap_df.loc[global_cp_id,'-lap'] = float(cp_prop[0])
-                    
+                    self.tlap_df.loc[global_cp_id, 'central_atom_id'] = c_atom[0]
+                    self.tlap_df.loc[global_cp_id, 'central_atom_type'] = c_atom[1]
+                    self.tlap_df.loc[global_cp_id, 'type'] = cp_type
+                    self.tlap_df.at[global_cp_id, 'coord'] = np.array(cp_coord, dtype=float)
+                    self.tlap_df.loc[global_cp_id, 'rho'] = float(cp_prop[2])
+                    self.tlap_df.loc[global_cp_id, 'grho'] = float(cp_prop[1])
+                    self.tlap_df.loc[global_cp_id, '-lap'] = float(cp_prop[0])
+
                     if not self.data[crit_point_line+6].strip():
                         outdiag_props = False
                     elif self.data[crit_point_line+6].strip().split()[0] == 'KINETIC':
                         outdiag_props = True
-                        cp_kener = self.data[crit_point_line+6].strip().split()[5:]
-                        cp_virial = self.data[crit_point_line+7].strip().split()[3]
-                        cp_elf = self.data[crit_point_line+8].strip().split()[2]
-                        self.tlap_df.loc[global_cp_id,'kinetic_g'] = float(cp_kener[0])
-                        self.tlap_df.loc[global_cp_id,'kinetic_k'] = float(cp_kener[1])
-                        self.tlap_df.loc[global_cp_id,'virial'] = float(cp_virial)
-                        self.tlap_df.loc[global_cp_id,'elf'] = float(cp_elf)
+                        cp_kener = self.data[crit_point_line+ \
+                            6].strip().split()[5:]
+                        cp_virial = self.data[crit_point_line+ \
+                            7].strip().split()[3]
+                        cp_elf = self.data[crit_point_line+ \
+                            8].strip().split()[2]
+                        self.tlap_df.loc[global_cp_id, 'kinetic_g'] = float(cp_kener[0])
+                        self.tlap_df.loc[global_cp_id, 'kinetic_k'] = float(cp_kener[1])
+                        self.tlap_df.loc[global_cp_id, 'virial'] = float(cp_virial)
+                        self.tlap_df.loc[global_cp_id, 'elf'] = float(cp_elf)
                         crit_point_line += 3
                         i += 3
                     else:
@@ -4307,16 +4527,18 @@ class Properties_output:
 
                     eigenval = self.data[crit_point_line+9].strip().split()[5:]
                     eigenvec = []
-                    eigenvec.append(self.data[crit_point_line+10].strip().split()[2:])
-                    eigenvec.append(self.data[crit_point_line+11].strip().split())
-                    eigenvec.append(self.data[crit_point_line+12].strip().split())
-                    self.tlap_df.at[global_cp_id,'eigenval'] = np.array(eigenval, dtype=float)
-                    self.tlap_df.at[global_cp_id,'eigenvec'] = np.array(eigenvec, dtype=float)
+                    eigenvec.append(
+                        self.data[crit_point_line+10].strip().split()[2:])
+                    eigenvec.append(
+                        self.data[crit_point_line+11].strip().split())
+                    eigenvec.append(
+                        self.data[crit_point_line+12].strip().split())
+                    self.tlap_df.at[global_cp_id, 'eigenval'] = np.array(eigenval, dtype=float)
+                    self.tlap_df.at[global_cp_id, 'eigenvec'] = np.array(eigenvec, dtype=float)
                     i += 12
-                    
 
                 elif bp_steps:
-                    #global_cp_id += 1
+                    # global_cp_id += 1
                     # ecrit stands for extra critical point, li
                     ecrit_point_line = i
                     ecrit_point_number = line.strip().split()[2]
@@ -4325,25 +4547,26 @@ class Properties_output:
                         break
 
                     cp_type = self.data[ecrit_point_line+3].strip().split()[4]
-                    cp_coord = self.data[ecrit_point_line+4].strip().split()[5:]
+                    cp_coord = self.data[ecrit_point_line+ \
+                        4].strip().split()[5:]
                     if self.data[ecrit_point_line+5].strip().split()[1] == 'FRACT.':
                         ecrit_point_line += 1
                         i += 1
                     cp_prop = self.data[ecrit_point_line+5].strip().split()[3:]
 
                     # Populating DF
-                    self.tlap_df.loc[global_cp_id,'central_atom_id'] = c_atom[0]
-                    self.tlap_df.loc[global_cp_id,'central_atom_type'] = c_atom[1]
-                    self.tlap_df.loc[global_cp_id,'type'] = cp_type
-                    self.tlap_df.at[global_cp_id,'coord'] = np.array(cp_coord, dtype=float)
-                    self.tlap_df.loc[global_cp_id,'rho'] = float(cp_prop[2])
-                    self.tlap_df.loc[global_cp_id,'grho'] = float(cp_prop[1])
-                    self.tlap_df.loc[global_cp_id,'-lap'] = float(cp_prop[0])
+                    self.tlap_df.loc[global_cp_id, 'central_atom_id'] = c_atom[0]
+                    self.tlap_df.loc[global_cp_id, 'central_atom_type'] = c_atom[1]
+                    self.tlap_df.loc[global_cp_id, 'type'] = cp_type
+                    self.tlap_df.at[global_cp_id, 'coord'] = np.array(cp_coord, dtype=float)
+                    self.tlap_df.loc[global_cp_id, 'rho'] = float(cp_prop[2])
+                    self.tlap_df.loc[global_cp_id, 'grho'] = float(cp_prop[1])
+                    self.tlap_df.loc[global_cp_id, '-lap'] = float(cp_prop[0])
 
-            if re.match(r' MAX. NUMBER OF STEP EXCEEDED',line) != None:
+            if re.match(r' MAX. NUMBER OF STEP EXCEEDED', line) != None:
                 bp_steps -= 1
 
-            if ((re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ',line) != None) and
+            if ((re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ', line) != None) and
                     bp_steps == 2):
                 bp_steps -= 1
                 # Following should be fixed, as it takes info of closest atom and not
@@ -4365,7 +4588,7 @@ class Properties_output:
                 # self.topo_df.loc[bp_cp_id,'atom_a_z'] = int(atom_a_z)
 
             # Data of second attractor associated to BCP
-            elif (re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ',line) != None and
+            elif (re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ', line) != None and
                     bp_steps == 1):
                 bp_steps -= 1
                 # Following should be fixed, as it takes info of closest atom and not
@@ -4381,13 +4604,13 @@ class Properties_output:
                 # else:
                 #     atom_b_cell = []
                 #     atom_b_z = atom_b_data[2]
-                
+
                 # self.topo_df.loc[bp_cp_id,'atom_b_id'] = int(atom_b_id)
                 # self.topo_df.at[bp_cp_id,'atom_b_cell'] = np.array(atom_b_cell, dtype=float)
                 # self.topo_df.loc[bp_cp_id,'atom_b_z'] = int(atom_b_z)
 
 
-            if re.match(r' TTRAJ',line) != None:
+            if re.match(r' TTRAJ', line) != None:
                 bp_steps = 0
                 # This works, but first the attractors info should be fixed.
                 # bp_length = line.strip().split()[6]
@@ -4395,7 +4618,7 @@ class Properties_output:
                 # bp_dist_ratio = line.strip().split()[8]
 
                 # # Populating info for atoms involved in bond CPs
-                
+
                 # self.topo_df.loc[bp_cp_id,'bp_length'] = float(bp_length)
                 # self.topo_df.loc[bp_cp_id,'distance_ab'] = float(distance_ab)
                 # self.topo_df.loc[bp_cp_id,'bp/dist'] = float(bp_dist_ratio)
@@ -4429,83 +4652,84 @@ class Properties_output:
 
         from ase import Atoms
 
-        if not hasattr(self,'tlap_df'):
-            print('ERROR: You need first to succesfully run read_topond_tlap() to use this.')
+        if not hasattr(self, 'tlap_df'):
+            print(
+                'ERROR: You need first to succesfully run read_topond_tlap() to use this.')
             sys.exit(1)
 
          # An ASE object is used as intermediate to generate different types of outputs
         if cp_type == 'ALL':
-            if hasattr(self,'unitcell_mat'):
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(self.tlap_df['type']),
-                    positions = list(self.tlap_df['coord']*0.529177), # factor for Bohr2Angs
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(self.tlap_df['type']),
+                    positions= list(self.tlap_df['coord']*0.529177), # factor for Bohr2Angs
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(self.tlap_df['type']),
-                    positions = list(self.tlap_df['coord']*0.529177)
+                    symbols= ["X"] * len(self.tlap_df['type']),
+                    positions= list(self.tlap_df['coord']*0.529177)
                 )
         elif cp_type == '-1':
             cp_type = 'minus1'
-            df_bcp =  self.tlap_df[self.tlap_df['type']=='(3,-1)']
-            if hasattr(self,'unitcell_mat'):
+            df_bcp =  self.tlap_df[self.tlap_df['type'] == '(3,-1)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_bcp['type']),
-                    positions = list(df_bcp['coord']*0.529177),
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_bcp['type']),
+                    positions= list(df_bcp['coord']*0.529177),
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_bcp['type']),
-                    positions = list(df_bcp['coord']*0.529177)
+                    symbols= ["X"] * len(df_bcp['type']),
+                    positions= list(df_bcp['coord']*0.529177)
                 )
         elif cp_type == '+1':
             cp_type = 'plus1'
-            df_rcp =  self.tlap_df[self.tlap_df['type']=='(3,+1)']
-            if hasattr(self,'unitcell_mat'):
+            df_rcp =  self.tlap_df[self.tlap_df['type'] == '(3,+1)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_rcp['type']),
-                    positions = list(df_rcp['coord']*0.529177),
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_rcp['type']),
+                    positions= list(df_rcp['coord']*0.529177),
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_rcp['type']),
-                    positions = list(df_rcp['coord']*0.529177)
+                    symbols= ["X"] * len(df_rcp['type']),
+                    positions= list(df_rcp['coord']*0.529177)
                 )
         elif cp_type == '+3':
             cp_type = 'plus3'
-            df_ccp =  self.tlap_df[self.tlap_df['type']=='(3,+3)']
-            if hasattr(self,'unitcell_mat'):
+            df_ccp =  self.tlap_df[self.tlap_df['type'] == '(3,+3)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_ccp['type']),
-                    positions = list(df_ccp['coord'] * 0.529177),
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_ccp['type']),
+                    positions= list(df_ccp['coord'] * 0.529177),
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_ccp['type']),
-                    positions = list(df_ccp['coord'] * 0.529177)
+                    symbols= ["X"] * len(df_ccp['type']),
+                    positions= list(df_ccp['coord'] * 0.529177)
                 )
         elif cp_type == '-3':
             cp_type = 'minus3'
-            df_nna =  self.tlap_df[self.tlap_df['type']=='(3,-3)']
-            if hasattr(self,'unitcell_mat'):
+            df_nna =  self.tlap_df[self.tlap_df['type'] == '(3,-3)']
+            if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_nna['type']),
-                    positions = list(df_nna['coord'] * 0.529177), # factor for Bohr2Angs
-                    cell = self.unitcell_mat,
-                    pbc=[True,True,True]
+                    symbols= ["X"] * len(df_nna['type']),
+                    positions= list(df_nna['coord'] * 0.529177), # factor for Bohr2Angs
+                    cell= self.unitcell_mat,
+                    pbc=[True, True,True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols = ["X"] * len(df_nna['type']),
-                    positions = list(df_nna['coord'] * 0.529177)
+                    symbols= ["X"] * len(df_nna['type']),
+                    positions= list(df_nna['coord'] * 0.529177)
                 )
 
         if add_atoms:
@@ -4513,8 +4737,9 @@ class Properties_output:
                 ase_obj.append(self.nuclei_df.loc[i + 1, 'z'])
                 ase_obj.positions[-1] = self.nuclei_df.loc[i + 1, 'coord']
 
-        ase_obj.write(self.tlap_filename + '_' + cp_type + '.' +file_type)
-        print(self.tlap_filename + '_' + cp_type + '.' + file_type + " generated.")
+        ase_obj.write(self.tlap_filename + '_' + cp_type + '.' + file_type)
+        print(self.tlap_filename + '_' + cp_type + \
+              '.' + file_type + " generated.")
 
         return ase_obj
 
