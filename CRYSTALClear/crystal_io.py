@@ -1409,8 +1409,8 @@ class Crystal_output:
 
     #### Lattice Dynamics ####
 
-    def get_phonon(self, read_eigvt=True, rm_imaginary=True, rm_overlap=True,
-                   imaginary_tol=-1e-4, q_overlap_tol=1e-4, eigvt_amplitude=1.):
+    def get_phonon(self, read_eigvt=True, rm_imaginary=True,
+                   imaginary_tol=-1e-4, eigvt_amplitude=1.):
         """
         Read phonon-related properties from output file.
 
@@ -1419,13 +1419,8 @@ class Crystal_output:
                 normalize it to 1.
             rm_imaginary (bool): Remove the modes with negative frequencies and
                 set all the related properties to NaN.
-            rm_overlap (bool): *For dispersion calculations* Remove repeated q
-                points and recalculate their weights.
             imaginary_tol (float): Valid only if ``rm_imaginary = True``.  The threshold
                 of negative frequencies.
-            q_overlap_tol (float): Valid only if ``rm_overlap = True``.  The threshold of
-                overlapping points, defined as the 2nd norm of the difference
-                of fractional q vectors
             eigvt_amplitude (float | str): Valid if ``read_eigvt = True``.
                 Amplitude of normalization, or "classical", "classical-rev",
                 classical amplitude and revmove classical amplitude.
@@ -1616,9 +1611,6 @@ class Crystal_output:
 
         if rm_imaginary == True:
             self = PhononBASE.clean_imaginary(self, threshold=imaginary_tol)
-
-        if rm_overlap == True and self.nqpoint > 1:
-            self = PhononBASE.clean_q_overlap(self, threshold=q_overlap_tol)
 
         return self
 
@@ -1820,6 +1812,100 @@ class Crystal_output:
 
         return self
 
+    def get_vci(self):
+        """
+        Extract VCI states (in development).
+
+        Returns:
+            self (Crystal_output): New attributes listed below.
+            self.VCI_label(np.array)
+            self.VCI_state(np.array)
+            self.VCI_energy(np.array)
+            self.VCI_nconfs(int)
+            self.VCI_list_conf(np.array)
+        """
+
+        import re
+        import numpy as np
+
+        save = False
+        nstate = 0
+        label = []
+        energy = []
+        state1 = []
+        state2 = []
+        ONVs = []
+
+        # Get harmonic freqs -->
+        self.get_phonon()
+        # <--
+
+        # Big loop over lines of CRYSTAL output file -->
+        for i, line in enumerate(self.data):
+
+            if re.match(r'^\s*\*\s*VIBRATIONAL\s+CONFIGURATION\s+INTERACTION\s+\(VCI\)\s*\*$', line):
+                save = True
+
+            if re.match(r'\s* VCI PERFORMED', line):
+                save = False
+
+            if (re.match(r'^\s*\d', line) and save):
+                # ONVs.append(line.split()[2:])  # only for taglia e cuci
+                ONVs.append(line.split()[3:])  # this is the correct one
+
+            #################################
+            # Remember to update VCI print in CRYSTAL !!!!!!
+            #################################
+
+            if re.match(r'\s*TOTAL NUMBER OF CONFIGURATIONS', line):
+                self.VCI_nconfs = (int(line.split()[4]))
+
+            if re.match(r'\s* VCI STATE \(', line):
+                nstate += 1
+                label.append(int(line.split()[3].replace(")", "")))
+                energy.append((float(line.split()[7])))
+                p = 3
+                loop = True
+                confs_tmp = []
+                coeffs_tmp = []
+                while loop:
+                    confs_tmp = confs_tmp + self.data[i+p].split()[1:]
+                    coeffs_tmp = coeffs_tmp + self.data[i+p+1].split()[1:]
+                    if (re.match(r'\s*CONFs', self.data[i+p+2])):
+                        loop = True
+                        p += 2
+                    else:
+                        loop = False
+                        break
+
+                confs = [int(x) for x in confs_tmp]
+                coeffs = [float(x) for x in coeffs_tmp]
+
+                state1.append(confs)
+                state2.append(coeffs)
+        # <--
+
+        # Parsing of ONVs -->
+        nmodes = len(ONVs[0])
+        for i in range(self.VCI_nconfs):
+            for m in range(nmodes):
+                ONVs[i][m] = int(ONVs[i][m].replace(')', '').replace(',', ''))
+                pass
+        self.VCI_list_conf = np.array(ONVs)
+        # <--
+
+        A = np.zeros((nstate, 2, len(confs)), dtype=float)
+
+        for i in range(nstate):
+            A[i, 0] = np.array(state1[i])
+            A[i, 1] = np.array(state2[i])
+
+        self.VCI_label = np.array(label)
+        self.VCI_energy = np.array(energy)
+        self.VCI_state = A
+
+        return self
+
     def get_anh_spectra(self):
         """
         Extract anharmonic (VSCF and VCI) IR and Raman spectra (in development).
@@ -1844,6 +1930,11 @@ class Crystal_output:
             self.Ram_VSCF_0K_par (np.array): 2D array containing VSCF Raman frequency and intensities (parallel component) computed at 0 K.
             self.Ram_VSCF_T_tot (np.array): 2D array containing VSCF Raman frequency and intensities (total) computed at temperature T. self.Ram_VSCF_T_per (array[float]): 2D numpy array containing VSCF Raman frequency and intensities (perpendicular component) computed at temperature T.
             self.Ram_VSCF_T_par (np.array): 2D array containing VSCF Raman frequency and intensities (parallel component) computed at temperature T.
+
+            self.Ram_VPT2_0K_tot (np.array): 2D array containing VPT2 Raman frequency and intensities (total) computed at 0 K. self.Ram_VPT2_0K_per (array[float]): 2D numpy array containing VSCF Raman frequency and intensities (perpendicular component) computed at 0 K.
+            self.Ram_VPT2_0K_par (np.array): 2D array containing VPT2 Raman frequency and intensities (parallel component) computed at 0 K.
+            self.Ram_VPT2_T_tot (np.array): 2D array containing VPT2 Raman frequency and intensities (total) computed at temperature T. self.Ram_VPT2_T_per (array[float]): 2D numpy array containing VSCF Raman frequency and intensities (perpendicular component) computed at temperature T.
+            self.Ram_VPT2_T_par (np.array): 2D array containing VPT2 Raman frequency and intensities (parallel component) computed at temperature T.
 
             self.Ram_VCI_0K_tot (np.array): 2D array containing VCI Raman frequency and intensities (total) computed at 0 K.
             self.Ram_VCI_0K_per (np.array): 2D array containing VCI Raman frequency and intensities (perpendicular component) computed at 0 K.
@@ -1874,16 +1965,25 @@ class Crystal_output:
         HO_Ram_T_tot = False
         HO_Ram_0K_comp = False
         HO_Ram_T_comp = False
+
         VSCF_IR = False
         VSCF_Ram_0K_tot = False
         VSCF_Ram_0K_comp = False
         VSCF_Ram_T_tot = False
         VSCF_Ram_T_comp = False
+
+        VPT2_IR = False
+        VPT2_Ram_0K_tot = False
+        VPT2_Ram_0K_comp = False
+        VPT2_Ram_T_tot = False
+        VPT2_Ram_T_comp = False
+
         VCI_IR = False
         VCI_Ram_0K_tot = False
         VCI_Ram_0K_comp = False
         VCI_Ram_T_tot = False
         VCI_Ram_T_comp = False
+
         # anscan
         imode_IR = []
         imode_Ram = []
@@ -1897,15 +1997,24 @@ class Crystal_output:
         # Initialize some member variables
         IR_HO = []
         IR_VSCF = []
+        IR_VPT2 = []
         IR_VCI = []
+
         Ram_HO_0K_tot = []
         Ram_HO_T_tot = []
         Ram_HO_0K_comp = []
         Ram_HO_T_comp = []
+
         Ram_VSCF_0K_tot = []
         Ram_VSCF_T_tot = []
         Ram_VSCF_0K_comp = []
         Ram_VSCF_T_comp = []
+
+        Ram_VPT2_0K_tot = []
+        Ram_VPT2_T_tot = []
+        Ram_VPT2_0K_comp = []
+        Ram_VPT2_T_comp = []
+
         Ram_VCI_0K_tot = []
         Ram_VCI_T_tot = []
         Ram_VCI_0K_comp = []
@@ -1920,16 +2029,25 @@ class Crystal_output:
         bufferHO_Ram_T_tot = []
         bufferHO_Ram_0K_comp = []
         bufferHO_Ram_T_comp = []
+
         bufferVSCF_IR = []
         bufferVSCF_Ram_0K_tot = []
         bufferVSCF_Ram_T_tot = []
         bufferVSCF_Ram_0K_comp = []
         bufferVSCF_Ram_T_comp = []
+
+        bufferVPT2_IR = []
+        bufferVPT2_Ram_0K_tot = []
+        bufferVPT2_Ram_T_tot = []
+        bufferVPT2_Ram_0K_comp = []
+        bufferVPT2_Ram_T_comp = []
+
         bufferVCI_IR = []
         bufferVCI_Ram_0K_tot = []
         bufferVCI_Ram_T_tot = []
         bufferVCI_Ram_0K_comp = []
         bufferVCI_Ram_T_comp = []
+
         # anscan
         bufferanscan_IR = []
         bufferanscan_Ram_0K_tot = []
@@ -1948,6 +2066,8 @@ class Crystal_output:
             if re.match(r'\s*ANHARMONIC IR SPECTRUM', line):
                 if re.match(r'\s*VSCF', self.data[i-1]):
                     VSCF_IR = True
+                elif re.match(r'\s*VPT2*', self.data[i-1]):
+                    VPT2_IR = True
                 elif re.match(r'\s*VCI*', self.data[i-1]):
                     VCI_IR = True
                 # anscan
@@ -1983,6 +2103,17 @@ class Crystal_output:
                         else:
                             VSCF_Ram_T_comp = True
                 save = True
+                if re.match(r'\s*VPT2*', self.data[i-1]):
+                    if re.match(r'\s*\[ 0 K \]', self.data[i+1]):
+                        if re.match(r'\s*I_TOT', self.data[i+4]):
+                            VPT2_Ram_0K_tot = True
+                        else:
+                            VPT2_Ram_0K_comp = True
+                    else:
+                        if re.match(r'\s*I_TOT', self.data[i+4]):
+                            VPT2_Ram_T_tot = True
+                        else:
+                            VPT2_Ram_T_comp = True
                 if re.match(r'\s*VCI*', self.data[i-1]):
                     if re.match(r'\s*\[ 0 K \]', self.data[i+1]):
                         if re.match(r'\s*I_TOT', self.data[i+4]):
@@ -2018,11 +2149,19 @@ class Crystal_output:
                 HO_Ram_T_tot = False
                 HO_Ram_0K_comp = False
                 HO_Ram_T_comp = False
+
                 VSCF_IR = False
                 VSCF_Ram_0K_tot = False
                 VSCF_Ram_0K_comp = False
                 VSCF_Ram_T_tot = False
                 VSCF_Ram_T_comp = False
+
+                VPT2_IR = False
+                VPT2_Ram_0K_tot = False
+                VPT2_Ram_0K_comp = False
+                VPT2_Ram_T_tot = False
+                VPT2_Ram_T_comp = False
+
                 VCI_IR = False
                 VCI_Ram_0K_tot = False
                 VCI_Ram_0K_comp = False
@@ -2057,6 +2196,16 @@ class Crystal_output:
                     bufferVSCF_Ram_0K_comp.append(line)
                 if VSCF_Ram_T_comp:
                     bufferVSCF_Ram_T_comp.append(line)
+                if VPT2_IR:
+                    bufferVPT2_IR.append(line)
+                if VPT2_Ram_0K_tot:
+                    bufferVPT2_Ram_0K_tot.append(line)
+                if VPT2_Ram_T_tot:
+                    bufferVPT2_Ram_T_tot.append(line)
+                if VPT2_Ram_0K_comp:
+                    bufferVPT2_Ram_0K_comp.append(line)
+                if VPT2_Ram_T_comp:
+                    bufferVPT2_Ram_T_comp.append(line)
                 if VCI_IR:
                     bufferVCI_IR.append(line)
                 if VCI_Ram_0K_tot:
@@ -2109,6 +2258,17 @@ class Crystal_output:
             IR_VSCF = np.array(IR_VSCF)
             self.IR_VSCF_T = IR_VSCF[:, 0:3:2]
             self.IR_VSCF_0K = IR_VSCF[:, 0:2]
+
+        # Save and parse VPT2 data for IR spectrum
+        n_VPT2_ir = len(bufferVPT2_IR)
+        if n_VPT2_ir > 0:
+            for i, line in enumerate(bufferVPT2_IR[5:n_VPT2_ir-1]):
+                IR_VPT2.append(line.split()[3:6])
+                for j in range(3):
+                    IR_VPT2[i][j] = float(IR_VPT2[i][j])
+            IR_VPT2 = np.array(IR_VPT2)
+            self.IR_VPT2_T = IR_VPT2[:, 0:3:2]
+            self.IR_VPT2_0K = IR_VPT2[:, 0:2]
 
         # Save and parse VCI data for IR spectrum
         n_VCI_ir = len(bufferVCI_IR)
@@ -2256,6 +2416,60 @@ class Crystal_output:
             self.Ram_VSCF_T_comp_yy = Ram_VSCF_T_comp[:, 0:5:4]
             self.Ram_VSCF_T_comp_yz = Ram_VSCF_T_comp[:, 0:6:5]
             self.Ram_VSCF_T_comp_zz = Ram_VSCF_T_comp[:, 0:7:6]
+
+       # Save and parse VPT2 data for Raman spectrum (0K, tot)
+        n_VPT2_Ram_0K_tot = len(bufferVPT2_Ram_0K_tot)
+        if n_VPT2_Ram_0K_tot > 0:
+            for i, line in enumerate(bufferVPT2_Ram_0K_tot[6:n_VPT2_Ram_0K_tot-1]):
+                Ram_VPT2_0K_tot.append(line.split()[3:7])
+                for j in range(4):
+                    Ram_VPT2_0K_tot[i][j] = float(Ram_VPT2_0K_tot[i][j])
+            Ram_VPT2_0K_tot = np.array(Ram_VPT2_0K_tot)
+            self.Ram_VPT2_0K_tot = Ram_VPT2_0K_tot[:, 0:2]
+            self.Ram_VPT2_0K_per = Ram_VPT2_0K_tot[:, 0:3:2]
+            self.Ram_VPT2_0K_par = Ram_VPT2_0K_tot[:, 0:4:3]
+
+       # Save and parse VPT2 data for Raman spectrum (T, tot)
+        n_VPT2_Ram_T_tot = len(bufferVPT2_Ram_T_tot)
+        if n_VPT2_Ram_T_tot > 0:
+            for i, line in enumerate(bufferVPT2_Ram_T_tot[6:n_VPT2_Ram_T_tot-1]):
+                Ram_VPT2_T_tot.append(line.split()[3:7])
+                for j in range(4):
+                    Ram_VPT2_T_tot[i][j] = float(Ram_VPT2_T_tot[i][j])
+            Ram_VPT2_T_tot = np.array(Ram_VPT2_T_tot)
+            self.Ram_VPT2_T_tot = Ram_VPT2_T_tot[:, 0:2]
+            self.Ram_VPT2_T_per = Ram_VPT2_T_tot[:, 0:3:2]
+            self.Ram_VPT2_T_par = Ram_VPT2_T_tot[:, 0:4:3]
+
+       # Save and parse VPT2 data for Raman spectrum (0K, comp)
+        n_VPT2_Ram_0K_comp = len(bufferVPT2_Ram_0K_comp)
+        if n_VPT2_Ram_0K_comp > 0:
+            for i, line in enumerate(bufferVPT2_Ram_0K_comp[6:n_VPT2_Ram_0K_comp-1]):
+                Ram_VPT2_0K_comp.append(line.split()[3:10])
+                for j in range(7):
+                    Ram_VPT2_0K_comp[i][j] = float(Ram_VPT2_0K_comp[i][j])
+            Ram_VPT2_0K_comp = np.array(Ram_VPT2_0K_comp)
+            self.Ram_VPT2_0K_comp_xx = Ram_VPT2_0K_comp[:, 0:2]
+            self.Ram_VPT2_0K_comp_xy = Ram_VPT2_0K_comp[:, 0:3:2]
+            self.Ram_VPT2_0K_comp_xz = Ram_VPT2_0K_comp[:, 0:4:3]
+            self.Ram_VPT2_0K_comp_yy = Ram_VPT2_0K_comp[:, 0:5:4]
+            self.Ram_VPT2_0K_comp_yz = Ram_VPT2_0K_comp[:, 0:6:5]
+            self.Ram_VPT2_0K_comp_zz = Ram_VPT2_0K_comp[:, 0:7:6]
+
+       # Save and parse VPT2 data for Raman spectrum (T, comp)
+        n_VPT2_Ram_T_comp = len(bufferVPT2_Ram_T_comp)
+        if n_VPT2_Ram_T_comp > 0:
+            for i, line in enumerate(bufferVPT2_Ram_T_comp[6:n_VPT2_Ram_T_comp-1]):
+                Ram_VPT2_T_comp.append(line.split()[3:10])
+                for j in range(7):
+                    Ram_VPT2_T_comp[i][j] = float(Ram_VPT2_T_comp[i][j])
+            Ram_VPT2_T_comp = np.array(Ram_VPT2_T_comp)
+            self.Ram_VPT2_T_comp_xx = Ram_VPT2_T_comp[:, 0:2]
+            self.Ram_VPT2_T_comp_xy = Ram_VPT2_T_comp[:, 0:3:2]
+            self.Ram_VPT2_T_comp_xz = Ram_VPT2_T_comp[:, 0:4:3]
+            self.Ram_VPT2_T_comp_yy = Ram_VPT2_T_comp[:, 0:5:4]
+            self.Ram_VPT2_T_comp_yz = Ram_VPT2_T_comp[:, 0:6:5]
+            self.Ram_VPT2_T_comp_zz = Ram_VPT2_T_comp[:, 0:7:6]
 
        # Save and parse VCI data for Raman spectrum (0K, tot)
         n_VCI_Ram_0K_tot = len(bufferVCI_Ram_0K_tot)
@@ -2677,7 +2891,7 @@ class Crystal_output:
         amu = self.data[amu_start_index:amu_end_index]
         # <--
 
-        # Parsing of data to return masses, symbols and isotopes index --> 
+        # Parsing of data to return masses, symbols and isotopes index -->
         self.symbols = []
         self.masses = []
         self.isotope_indexes = []
@@ -2685,7 +2899,7 @@ class Crystal_output:
         for line in amu:
             splitline = line.split()
             at_mass += [splitline[x: x + 3]
-                for x in range(0, len(splitline), 3)]
+                        for x in range(0, len(splitline), 3)]
 
         for ls in at_mass:
             if (ls[1] not in self.symbols) and (float(ls[2]) not in self.masses):
@@ -2756,22 +2970,28 @@ class Crystal_output:
         # <--
 
         # Extraction of bond, angle and dih informations -->
-        bonds = [line.split() for line in self.data[bond_start[0]+1:angle_start[0]]]
-        angle = [line.split() for line in self.data[angle_start[0]+1:dih_start[0]]]
-        dih = [line.split() for line in self.data[dih_start[0]+1:section_end[0]]]
+        bonds = [line.split()
+                 for line in self.data[bond_start[0]+1:angle_start[0]]]
+        angle = [line.split()
+                 for line in self.data[angle_start[0]+1:dih_start[0]]]
+        dih = [line.split()
+               for line in self.data[dih_start[0]+1:section_end[0]]]
         # <--
 
         # Extraction of bond, angle and dih force constants informations -->
-        bonds_fc = [line.split() for line in self.data[bond_start[1]+1:angle_start[1]]]
-        angle_fc = [line.split() for line in self.data[angle_start[1]+1:dih_start[1]]]
-        dih_fc = [line.split() for line in self.data[dih_start[1]+1:section_end[1]]]
+        bonds_fc = [line.split()
+                    for line in self.data[bond_start[1]+1:angle_start[1]]]
+        angle_fc = [line.split()
+                    for line in self.data[angle_start[1]+1:dih_start[1]]]
+        dih_fc = [line.split()
+                  for line in self.data[dih_start[1]+1:section_end[1]]]
         # <--
-        
+
         # Creation of Bonds dataframe
         for bond in bonds:
-            bond[0] = int(bond[0]) 
-            bond[1] = int(bond[1]) 
-            bond[3] = int(bond[3]) 
+            bond[0] = int(bond[0])
+            bond[1] = int(bond[1])
+            bond[3] = int(bond[3])
             bond[-2] = float(bond[-2])
             del bond[5:-2]
             bond.pop(-1)
@@ -2785,9 +3005,9 @@ class Crystal_output:
             bonds[index] = bond + bonds_fc[index]
 
         self.bonds = pd.DataFrame(bonds, columns=['ic index',
-                                                  'Atom 1 label', 
-                                                  'Atom 1', 
-                                                  'Atom 2 label', 
+                                                  'Atom 1 label',
+                                                  'Atom 1',
+                                                  'Atom 2 label',
                                                   'Atom 2',
                                                   'Bond Length',
                                                   'k^a',
@@ -2797,11 +3017,11 @@ class Crystal_output:
 
         # Creation of Bonds dataframe
         for ang in angle:
-            opening = [i  for i, n in enumerate(ang) if n.startswith('(')]
+            opening = [i for i, n in enumerate(ang) if n.startswith('(')]
             ending = [i for i, n in enumerate(ang) if n.endswith(')')]
-            ang[0] = int(ang[0]) 
-            ang[1] = int(ang[1]) 
-            ang[3] = int(ang[3]) 
+            ang[0] = int(ang[0])
+            ang[1] = int(ang[1])
+            ang[3] = int(ang[3])
             ang[ending[0]+1] = int(ang[ending[0]+1])
             ang[-2] = float(ang[-2])
             opening.sort(reverse=True)
@@ -2822,9 +3042,9 @@ class Crystal_output:
             angle[index] = ang + angle_fc[index]
 
         self.angle = pd.DataFrame(angle, columns=['ic index',
-                                                  'Atom 1 label', 
-                                                  'Atom 1', 
-                                                  'Atom 2 label', 
+                                                  'Atom 1 label',
+                                                  'Atom 1',
+                                                  'Atom 2 label',
                                                   'Atom 2',
                                                   'Atom 3 label',
                                                   'Atom 3',
@@ -2837,11 +3057,11 @@ class Crystal_output:
 
         # Creation of Bonds dataframe
         for d in dih:
-            opening = [i  for i, n in enumerate(d) if n.startswith('(')]
+            opening = [i for i, n in enumerate(d) if n.startswith('(')]
             ending = [i for i, n in enumerate(d) if n.endswith(')')]
-            d[0] = int(d[0]) 
-            d[1] = int(d[1]) 
-            d[3] = int(d[3]) 
+            d[0] = int(d[0])
+            d[1] = int(d[1])
+            d[3] = int(d[3])
             d[ending[0]+1] = int(d[ending[0]+1])
             d[ending[1]+1] = int(d[ending[1]+1])
             d[-2] = float(d[-2])
@@ -2863,9 +3083,9 @@ class Crystal_output:
             dih[index] = d + dih_fc[index]
 
         self.dih = pd.DataFrame(dih, columns=['ic index',
-                                              'Atom 1 label', 
-                                              'Atom 1', 
-                                              'Atom 2 label', 
+                                              'Atom 1 label',
+                                              'Atom 1',
+                                              'Atom 2 label',
                                               'Atom 2',
                                               'Atom 3 label',
                                               'Atom 3',
@@ -2881,30 +3101,31 @@ class Crystal_output:
         # Extraction of CNM data -->
         cnm = []
         for index, i in enumerate(cnm_section_start):
-            cnm_tmp = [line.split() for line in self.data[i+2:i+internal_number+2]]
+            cnm_tmp = [line.split()
+                       for line in self.data[i+2:i+internal_number+2]]
             for k in cnm_tmp:
                 if index != 0:
                     del k[0:2]
                     for j, el in enumerate(k):
                         k[j] = float(el)
-            
+
                 else:
                     k[0] = int(k[0])
                     for j, el in enumerate(k):
                         if j >= 2:
                             k[j] = float(el)
                     k.pop(1)
-            
+
             cnm += [cnm_tmp]
-            
+
         for index, section in enumerate(cnm):
             if index > 0:
                 for idx, element in enumerate(section):
-                    cnm[0][idx] += element 
+                    cnm[0][idx] += element
 
         self.cnm = pd.DataFrame(cnm[0])
 
-        return(self)
+        return (self)
 
 
 class Properties_input:
@@ -2920,7 +3141,7 @@ class Properties_input:
         Read the prope
         fo
         forrrties input from a file.
- 
+
         Args:
             input_name (str): Name of the input file.
         Returns:
@@ -4133,8 +4354,8 @@ class Properties_output:
         properties = ["type", "coord", "rho", "grho", "lap",
                       "kinetic_g", "kinetic_k", "virial", "elf",
                       "eigenval", "eigenvec", "ellip", "atom_a_id",
-                      "atom_a_cell" , "atom_a_z", "atom_b_id",
-                      "atom_b_cell" , "atom_b_z", "bp_length",
+                      "atom_a_cell", "atom_a_z", "atom_b_id",
+                      "atom_b_cell", "atom_b_z", "bp_length",
                       "distance_ab", "bp/dist"]
 
         self.topo_df = pd.DataFrame(columns=properties)
@@ -4163,7 +4384,8 @@ class Properties_output:
                 for n_atom in range(1, num_atoms+1):
                     atom_data = self.data[i+n_atom].strip().split()
                     self.nuclei_df.loc[n_atom, 'z'] = int(atom_data[1])
-                    self.nuclei_df.loc[n_atom, 'coord'] = np.array(atom_data[4:7],dtype=float)
+                    self.nuclei_df.loc[n_atom, 'coord'] = np.array(
+                        atom_data[4:7], dtype=float)
                 i += num_atoms
 
             if re.match(r' SEARCH OF BOND PATH', line) != None:
@@ -4186,8 +4408,8 @@ class Properties_output:
                     cp_kener = self.data[crit_point_line+6].strip().split()[5:]
                     cp_virial = self.data[crit_point_line+7].strip().split()[3]
                     cp_elf = self.data[crit_point_line+8].strip().split()[2]
-                    eigenval = self.data[crit_point_line+ \
-                        12].strip().split()[5:]
+                    eigenval = self.data[crit_point_line +
+                                         12].strip().split()[5:]
                     eigenvec = []
                     eigenvec.append(
                         self.data[crit_point_line+13].strip().split()[2:])
@@ -4201,24 +4423,33 @@ class Properties_output:
 
                     # Only bond cp has ellipticity calculated
                     if cp_type == "(3,-1)":
-                        ellip = self.data[crit_point_line+ \
-                            17].strip().split()[2]
+                        ellip = self.data[crit_point_line +
+                                          17].strip().split()[2]
                         i += 1
                     else:
                         ellip = 0
 
                     # Populating the dataframe
                     self.topo_df.loc[crit_point_number, 'type'] = cp_type
-                    self.topo_df.loc[crit_point_number, 'coord'] = np.array(cp_coord, dtype=float)
-                    self.topo_df.loc[crit_point_number, 'rho'] = float(cp_prop[0])
-                    self.topo_df.loc[crit_point_number, 'grho'] = float(cp_prop[1])
-                    self.topo_df.loc[crit_point_number, 'lap'] = float(cp_prop[2])
-                    self.topo_df.loc[crit_point_number, 'kinetic_g'] = float(cp_kener[0])
-                    self.topo_df.loc[crit_point_number, 'kinetic_k'] = float(cp_kener[1])
-                    self.topo_df.loc[crit_point_number, 'virial'] = float(cp_virial)
+                    self.topo_df.loc[crit_point_number, 'coord'] = np.array(
+                        cp_coord, dtype=float)
+                    self.topo_df.loc[crit_point_number,
+                                     'rho'] = float(cp_prop[0])
+                    self.topo_df.loc[crit_point_number,
+                                     'grho'] = float(cp_prop[1])
+                    self.topo_df.loc[crit_point_number,
+                                     'lap'] = float(cp_prop[2])
+                    self.topo_df.loc[crit_point_number,
+                                     'kinetic_g'] = float(cp_kener[0])
+                    self.topo_df.loc[crit_point_number,
+                                     'kinetic_k'] = float(cp_kener[1])
+                    self.topo_df.loc[crit_point_number,
+                                     'virial'] = float(cp_virial)
                     self.topo_df.loc[crit_point_number, 'elf'] = float(cp_elf)
-                    self.topo_df.loc[crit_point_number, 'eigenval'] = np.array(eigenval, dtype=float)
-                    self.topo_df.loc[crit_point_number, 'eigenvec'] = np.array(eigenvec, dtype=float)
+                    self.topo_df.loc[crit_point_number, 'eigenval'] = np.array(
+                        eigenval, dtype=float)
+                    self.topo_df.loc[crit_point_number, 'eigenvec'] = np.array(
+                        eigenvec, dtype=float)
                     self.topo_df.loc[crit_point_number, 'ellip'] = float(ellip)
 
                 else:
@@ -4230,8 +4461,8 @@ class Properties_output:
                         break
 
                     cp_type = self.data[ecrit_point_line+3].strip().split()[4]
-                    cp_coord = self.data[ecrit_point_line+ \
-                        4].strip().split()[5:]
+                    cp_coord = self.data[ecrit_point_line +
+                                         4].strip().split()[5:]
                     if self.data[ecrit_point_line+5].strip().split()[1] == 'FRACT.':
                         ecrit_point_line += 1
                         i += 1
@@ -4239,10 +4470,14 @@ class Properties_output:
 
                     # Populating DF
                     self.topo_df.loc[ecrit_point_number, 'type'] = cp_type
-                    self.topo_df.loc[ecrit_point_number, 'coord'] = np.array(cp_coord, dtype=float)
-                    self.topo_df.loc[ecrit_point_number, 'rho'] = float(cp_prop[0])
-                    self.topo_df.loc[ecrit_point_number, 'grho'] = float(cp_prop[1])
-                    self.topo_df.loc[ecrit_point_number, 'lap'] = float(cp_prop[2])
+                    self.topo_df.loc[ecrit_point_number,
+                                     'coord'] = np.array(cp_coord, dtype=float)
+                    self.topo_df.loc[ecrit_point_number,
+                                     'rho'] = float(cp_prop[0])
+                    self.topo_df.loc[ecrit_point_number,
+                                     'grho'] = float(cp_prop[1])
+                    self.topo_df.loc[ecrit_point_number,
+                                     'lap'] = float(cp_prop[2])
 
             # Data of first attractor associated to BCP
             if ((re.match(r' CLUSTER OF ATOMS AROUND THE TERMINUS ', line) != None) and
@@ -4285,15 +4520,22 @@ class Properties_output:
                 bp_dist_ratio = line.strip().split()[9]
 
                 # Populating info for atoms involved in bond CPs
-                self.topo_df.loc[crit_point_number, 'atom_a_id'] = int(atom_a_id)
-                self.topo_df.loc[crit_point_number, 'atom_a_cell'] = np.array(atom_a_cell, dtype=float)
+                self.topo_df.loc[crit_point_number,
+                                 'atom_a_id'] = int(atom_a_id)
+                self.topo_df.loc[crit_point_number, 'atom_a_cell'] = np.array(
+                    atom_a_cell, dtype=float)
                 self.topo_df.loc[crit_point_number, 'atom_a_z'] = int(atom_a_z)
-                self.topo_df.loc[crit_point_number, 'atom_b_id'] = int(atom_b_id)
-                self.topo_df.loc[crit_point_number, 'atom_b_cell'] = np.array(atom_b_cell, dtype=float)
+                self.topo_df.loc[crit_point_number,
+                                 'atom_b_id'] = int(atom_b_id)
+                self.topo_df.loc[crit_point_number, 'atom_b_cell'] = np.array(
+                    atom_b_cell, dtype=float)
                 self.topo_df.loc[crit_point_number, 'atom_b_z'] = int(atom_b_z)
-                self.topo_df.loc[crit_point_number, 'bp_length'] = float(bp_length)
-                self.topo_df.loc[crit_point_number, 'distance_ab'] = float(distance_ab)
-                self.topo_df.loc[crit_point_number, 'bp/dist'] = float(bp_dist_ratio)
+                self.topo_df.loc[crit_point_number,
+                                 'bp_length'] = float(bp_length)
+                self.topo_df.loc[crit_point_number,
+                                 'distance_ab'] = float(distance_ab)
+                self.topo_df.loc[crit_point_number,
+                                 'bp/dist'] = float(bp_dist_ratio)
 
             # Next line iterator
             i += 1
@@ -4332,71 +4574,73 @@ class Properties_output:
         if cp_type == 'ALL':
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(self.topo_df['type']),
-                    positions= list(self.topo_df['coord']*0.529177), # factor for Bohr2Angs
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(self.topo_df['type']),
+                    # factor for Bohr2Angs
+                    positions=list(self.topo_df['coord']*0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(self.topo_df['type']),
-                    positions= list(self.topo_df['coord']*0.529177)
+                    symbols=["X"] * len(self.topo_df['type']),
+                    positions=list(self.topo_df['coord']*0.529177)
                 )
         elif cp_type == 'BCP':
-            df_bcp =  self.topo_df[self.topo_df['type'] == '(3,-1)']
+            df_bcp = self.topo_df[self.topo_df['type'] == '(3,-1)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_bcp['type']),
-                    positions= list(df_bcp['coord']*0.529177),
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_bcp['type']),
+                    positions=list(df_bcp['coord']*0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_bcp['type']),
-                    positions= list(df_bcp['coord']*0.529177)
+                    symbols=["X"] * len(df_bcp['type']),
+                    positions=list(df_bcp['coord']*0.529177)
                 )
         elif cp_type == 'RCP':
-            df_rcp =  self.topo_df[self.topo_df['type'] == '(3,1)']
+            df_rcp = self.topo_df[self.topo_df['type'] == '(3,1)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_rcp['type']),
-                    positions= list(df_rcp['coord']*0.529177),
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_rcp['type']),
+                    positions=list(df_rcp['coord']*0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_rcp['type']),
-                    positions= list(df_rcp['coord']*0.529177)
+                    symbols=["X"] * len(df_rcp['type']),
+                    positions=list(df_rcp['coord']*0.529177)
                 )
         elif cp_type == 'CCP':
-            df_ccp =  self.topo_df[self.topo_df['type'] == '(3,3)']
+            df_ccp = self.topo_df[self.topo_df['type'] == '(3,3)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_ccp['type']),
-                    positions= list(df_ccp['coord'] * 0.529177),
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_ccp['type']),
+                    positions=list(df_ccp['coord'] * 0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_ccp['type']),
-                    positions= list(df_ccp['coord'] * 0.529177)
+                    symbols=["X"] * len(df_ccp['type']),
+                    positions=list(df_ccp['coord'] * 0.529177)
                 )
         elif cp_type == 'NNA':
-            df_nna =  self.topo_df[self.topo_df['type'] == '(3,-3)']
+            df_nna = self.topo_df[self.topo_df['type'] == '(3,-3)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_nna['type']),
-                    positions= list(df_nna['coord'] * 0.529177), # factor for Bohr2Angs
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_nna['type']),
+                    # factor for Bohr2Angs
+                    positions=list(df_nna['coord'] * 0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_nna['type']),
-                    positions= list(df_nna['coord'] * 0.529177)
+                    symbols=["X"] * len(df_nna['type']),
+                    positions=list(df_nna['coord'] * 0.529177)
                 )
 
         if add_atoms:
@@ -4405,7 +4649,7 @@ class Properties_output:
                 ase_obj.positions[-1] = self.nuclei_df.loc[i + 1, 'coord']
 
         ase_obj.write(self.topo_filename + '_' + cp_type + '.' + file_type)
-        print(self.topo_filename + '_' + cp_type + \
+        print(self.topo_filename + '_' + cp_type +
               '.' + file_type + " generated.")
 
         return ase_obj
@@ -4429,13 +4673,13 @@ class Properties_output:
 
         self.tlap_filename = str(properties_output).split('.')[0]
 
-        properties = ["central_atom_id", "central_atom_type","type", "coord", "rho", "grho", "-lap",
+        properties = ["central_atom_id", "central_atom_type", "type", "coord", "rho", "grho", "-lap",
                       "kinetic_g", "kinetic_k", "virial", "elf",
-                    "eigenval", "eigenvec"]
-                 # To be included. Attr stands for attractor.
-                  # "attr_a_id","attr_a_cell" ,"attr_a_z",
-                  # "attr_b_id", "attr_b_cell" ,"attr_b_z",
-                 # "bp_length", "distance_ab", "bp/dist"]
+                      "eigenval", "eigenvec"]
+        # To be included. Attr stands for attractor.
+        # "attr_a_id","attr_a_cell" ,"attr_a_z",
+        # "attr_b_id", "attr_b_cell" ,"attr_b_z",
+        # "bp_length", "distance_ab", "bp/dist"]
 
         self.tlap_df = pd.DataFrame(columns=properties)
         self.tlap_df['eigenval'] = self.tlap_df['eigenval'].astype(object)
@@ -4473,7 +4717,8 @@ class Properties_output:
                 for n_atom in range(1, num_atoms+1):
                     atom_data = self.data[i+n_atom].strip().split()
                     self.nuclei_df.loc[n_atom, 'z'] = int(atom_data[1])
-                    self.nuclei_df.loc[n_atom, 'coord'] = np.array(atom_data[4:7],dtype=float)
+                    self.nuclei_df.loc[n_atom, 'coord'] = np.array(
+                        atom_data[4:7], dtype=float)
                 i += num_atoms
 
             if re.match(r' ATTRACTORS OF THE UNIQUE PAIRS', line) != None:
@@ -4498,10 +4743,13 @@ class Properties_output:
                         crit_point_line += 1
                         i += 1
                     cp_prop = self.data[crit_point_line+5].strip().split()[3:]
-                    self.tlap_df.loc[global_cp_id, 'central_atom_id'] = c_atom[0]
-                    self.tlap_df.loc[global_cp_id, 'central_atom_type'] = c_atom[1]
+                    self.tlap_df.loc[global_cp_id,
+                                     'central_atom_id'] = c_atom[0]
+                    self.tlap_df.loc[global_cp_id,
+                                     'central_atom_type'] = c_atom[1]
                     self.tlap_df.loc[global_cp_id, 'type'] = cp_type
-                    self.tlap_df.at[global_cp_id, 'coord'] = np.array(cp_coord, dtype=float)
+                    self.tlap_df.at[global_cp_id, 'coord'] = np.array(
+                        cp_coord, dtype=float)
                     self.tlap_df.loc[global_cp_id, 'rho'] = float(cp_prop[2])
                     self.tlap_df.loc[global_cp_id, 'grho'] = float(cp_prop[1])
                     self.tlap_df.loc[global_cp_id, '-lap'] = float(cp_prop[0])
@@ -4510,15 +4758,18 @@ class Properties_output:
                         outdiag_props = False
                     elif self.data[crit_point_line+6].strip().split()[0] == 'KINETIC':
                         outdiag_props = True
-                        cp_kener = self.data[crit_point_line+ \
-                            6].strip().split()[5:]
-                        cp_virial = self.data[crit_point_line+ \
-                            7].strip().split()[3]
-                        cp_elf = self.data[crit_point_line+ \
-                            8].strip().split()[2]
-                        self.tlap_df.loc[global_cp_id, 'kinetic_g'] = float(cp_kener[0])
-                        self.tlap_df.loc[global_cp_id, 'kinetic_k'] = float(cp_kener[1])
-                        self.tlap_df.loc[global_cp_id, 'virial'] = float(cp_virial)
+                        cp_kener = self.data[crit_point_line +
+                                             6].strip().split()[5:]
+                        cp_virial = self.data[crit_point_line +
+                                              7].strip().split()[3]
+                        cp_elf = self.data[crit_point_line +
+                                           8].strip().split()[2]
+                        self.tlap_df.loc[global_cp_id,
+                                         'kinetic_g'] = float(cp_kener[0])
+                        self.tlap_df.loc[global_cp_id,
+                                         'kinetic_k'] = float(cp_kener[1])
+                        self.tlap_df.loc[global_cp_id,
+                                         'virial'] = float(cp_virial)
                         self.tlap_df.loc[global_cp_id, 'elf'] = float(cp_elf)
                         crit_point_line += 3
                         i += 3
@@ -4533,8 +4784,10 @@ class Properties_output:
                         self.data[crit_point_line+11].strip().split())
                     eigenvec.append(
                         self.data[crit_point_line+12].strip().split())
-                    self.tlap_df.at[global_cp_id, 'eigenval'] = np.array(eigenval, dtype=float)
-                    self.tlap_df.at[global_cp_id, 'eigenvec'] = np.array(eigenvec, dtype=float)
+                    self.tlap_df.at[global_cp_id, 'eigenval'] = np.array(
+                        eigenval, dtype=float)
+                    self.tlap_df.at[global_cp_id, 'eigenvec'] = np.array(
+                        eigenvec, dtype=float)
                     i += 12
 
                 elif bp_steps:
@@ -4547,18 +4800,21 @@ class Properties_output:
                         break
 
                     cp_type = self.data[ecrit_point_line+3].strip().split()[4]
-                    cp_coord = self.data[ecrit_point_line+ \
-                        4].strip().split()[5:]
+                    cp_coord = self.data[ecrit_point_line +
+                                         4].strip().split()[5:]
                     if self.data[ecrit_point_line+5].strip().split()[1] == 'FRACT.':
                         ecrit_point_line += 1
                         i += 1
                     cp_prop = self.data[ecrit_point_line+5].strip().split()[3:]
 
                     # Populating DF
-                    self.tlap_df.loc[global_cp_id, 'central_atom_id'] = c_atom[0]
-                    self.tlap_df.loc[global_cp_id, 'central_atom_type'] = c_atom[1]
+                    self.tlap_df.loc[global_cp_id,
+                                     'central_atom_id'] = c_atom[0]
+                    self.tlap_df.loc[global_cp_id,
+                                     'central_atom_type'] = c_atom[1]
                     self.tlap_df.loc[global_cp_id, 'type'] = cp_type
-                    self.tlap_df.at[global_cp_id, 'coord'] = np.array(cp_coord, dtype=float)
+                    self.tlap_df.at[global_cp_id, 'coord'] = np.array(
+                        cp_coord, dtype=float)
                     self.tlap_df.loc[global_cp_id, 'rho'] = float(cp_prop[2])
                     self.tlap_df.loc[global_cp_id, 'grho'] = float(cp_prop[1])
                     self.tlap_df.loc[global_cp_id, '-lap'] = float(cp_prop[0])
@@ -4608,7 +4864,6 @@ class Properties_output:
                 # self.topo_df.loc[bp_cp_id,'atom_b_id'] = int(atom_b_id)
                 # self.topo_df.at[bp_cp_id,'atom_b_cell'] = np.array(atom_b_cell, dtype=float)
                 # self.topo_df.loc[bp_cp_id,'atom_b_z'] = int(atom_b_z)
-
 
             if re.match(r' TTRAJ', line) != None:
                 bp_steps = 0
@@ -4661,75 +4916,77 @@ class Properties_output:
         if cp_type == 'ALL':
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(self.tlap_df['type']),
-                    positions= list(self.tlap_df['coord']*0.529177), # factor for Bohr2Angs
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(self.tlap_df['type']),
+                    # factor for Bohr2Angs
+                    positions=list(self.tlap_df['coord']*0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(self.tlap_df['type']),
-                    positions= list(self.tlap_df['coord']*0.529177)
+                    symbols=["X"] * len(self.tlap_df['type']),
+                    positions=list(self.tlap_df['coord']*0.529177)
                 )
         elif cp_type == '-1':
             cp_type = 'minus1'
-            df_bcp =  self.tlap_df[self.tlap_df['type'] == '(3,-1)']
+            df_bcp = self.tlap_df[self.tlap_df['type'] == '(3,-1)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_bcp['type']),
-                    positions= list(df_bcp['coord']*0.529177),
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_bcp['type']),
+                    positions=list(df_bcp['coord']*0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_bcp['type']),
-                    positions= list(df_bcp['coord']*0.529177)
+                    symbols=["X"] * len(df_bcp['type']),
+                    positions=list(df_bcp['coord']*0.529177)
                 )
         elif cp_type == '+1':
             cp_type = 'plus1'
-            df_rcp =  self.tlap_df[self.tlap_df['type'] == '(3,+1)']
+            df_rcp = self.tlap_df[self.tlap_df['type'] == '(3,+1)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_rcp['type']),
-                    positions= list(df_rcp['coord']*0.529177),
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_rcp['type']),
+                    positions=list(df_rcp['coord']*0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_rcp['type']),
-                    positions= list(df_rcp['coord']*0.529177)
+                    symbols=["X"] * len(df_rcp['type']),
+                    positions=list(df_rcp['coord']*0.529177)
                 )
         elif cp_type == '+3':
             cp_type = 'plus3'
-            df_ccp =  self.tlap_df[self.tlap_df['type'] == '(3,+3)']
+            df_ccp = self.tlap_df[self.tlap_df['type'] == '(3,+3)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_ccp['type']),
-                    positions= list(df_ccp['coord'] * 0.529177),
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_ccp['type']),
+                    positions=list(df_ccp['coord'] * 0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_ccp['type']),
-                    positions= list(df_ccp['coord'] * 0.529177)
+                    symbols=["X"] * len(df_ccp['type']),
+                    positions=list(df_ccp['coord'] * 0.529177)
                 )
         elif cp_type == '-3':
             cp_type = 'minus3'
-            df_nna =  self.tlap_df[self.tlap_df['type'] == '(3,-3)']
+            df_nna = self.tlap_df[self.tlap_df['type'] == '(3,-3)']
             if hasattr(self, 'unitcell_mat'):
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_nna['type']),
-                    positions= list(df_nna['coord'] * 0.529177), # factor for Bohr2Angs
-                    cell= self.unitcell_mat,
-                    pbc=[True, True,True]
+                    symbols=["X"] * len(df_nna['type']),
+                    # factor for Bohr2Angs
+                    positions=list(df_nna['coord'] * 0.529177),
+                    cell=self.unitcell_mat,
+                    pbc=[True, True, True]
                 )
             else:
                 ase_obj = Atoms(
-                    symbols= ["X"] * len(df_nna['type']),
-                    positions= list(df_nna['coord'] * 0.529177)
+                    symbols=["X"] * len(df_nna['type']),
+                    positions=list(df_nna['coord'] * 0.529177)
                 )
 
         if add_atoms:
@@ -4738,7 +4995,7 @@ class Properties_output:
                 ase_obj.positions[-1] = self.nuclei_df.loc[i + 1, 'coord']
 
         ase_obj.write(self.tlap_filename + '_' + cp_type + '.' + file_type)
-        print(self.tlap_filename + '_' + cp_type + \
+        print(self.tlap_filename + '_' + cp_type +
               '.' + file_type + " generated.")
 
         return ase_obj
