@@ -195,11 +195,11 @@ def plot_cry_bands(bands, k_labels, energy_range, title, not_scaled, mode, lines
 
         hsp[len(hsp)-1] = xmax
 
-        y_band = np.linspace(ymin*1.05, ymax*1.05, 2)
+        # y_band = np.linspace(ymin*1.05, ymax*1.05, 2)
 
         for j in hsp:
-            x_band = np.ones(2)*j
-            ax.plot(x_band, y_band, color='black', linewidth=0.5)
+            # x_band = np.ones(2)*j
+            ax.axvline(x=j, color='black', linewidth=0.5)
 
         # plot of the fermi level
         x = np.linspace(xmin, xmax, 2)
