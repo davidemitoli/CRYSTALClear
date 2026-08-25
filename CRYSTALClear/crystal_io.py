@@ -234,6 +234,336 @@ class Crystal_output:
             if re.match(r'\s SHRINK. FACT.(MONKH.)', line) != None:
                 self.num_k = int(line.split()[13])
 
+    #### Calculation setup ####
+
+    def get_code_version(self):
+        """
+        Get the CRYSTAL executable and version that produced the output.
+
+        Only the banner is scanned — it always precedes the ``STARTING DATE``
+        line, though how far down it sits depends on how much of the input deck
+        the run echoed first.
+
+        Returns:
+            self.code_version (dict): New attribute. Keys:
+
+                * 'code' (str|None): e.g. 'CRYSTAL23'.
+                * 'version' (str|None): the release line under the banner, e.g.
+                  'public : 1.0.1 - Feb 1st, 2017'.
+        """
+        import re
+
+        self.code_version = {'code': None, 'version': None}
+        for line in self.data[:self.eoo]:
+            if re.match(r'^\s*EEEEEEEEEE STARTING', line):
+                break  # past the banner: the run itself starts here
+            if self.code_version['code'] is None:
+                match = re.search(r'\*\s+(CRYSTAL\d+)\s+\*', line)
+                if match:
+                    self.code_version['code'] = match.group(1)
+                    continue
+            match = re.search(r'\*\s+(public\s*:.+?)\s+\*', line)
+            if match:
+                self.code_version['version'] = match.group(1).strip()
+                break
+
+        return self.code_version
+
+    def get_hamiltonian(self):
+        """
+        Get the Hamiltonian the calculation was run with.
+
+        Reads the ``TYPE OF CALCULATION`` / ``... HAMILTONIAN`` block printed
+        before the SCF, so it works for any run type. Entries the output does
+        not report are left as None rather than guessed.
+
+        Returns:
+            self.hamiltonian (dict): New attribute. Keys:
+
+                * 'method' (str|None): 'DFT' or 'Hartree-Fock'.
+                * 'exchange' (str|None): exchange functional, e.g.
+                  'PERDEW-BURKE-ERNZERHOF'. None for Hartree-Fock.
+                * 'correlation' (str|None): correlation functional.
+                * 'hybrid_exchange' (float|None): percentage of Fock exchange,
+                  for hybrid functionals only.
+                * 'shell_type' (str|None): e.g. 'RESTRICTED CLOSED SHELL'.
+                * 'spin_polarized' (bool): whether the run is unrestricted.
+                * 'dispersion' (str|None): dispersion correction, e.g.
+                  'DFT-D3(BJ)'.
+        """
+        import re
+
+        self.hamiltonian = {
+            'method': None, 'exchange': None, 'correlation': None,
+            'hybrid_exchange': None, 'shell_type': None,
+            'spin_polarized': False, 'dispersion': None,
+        }
+
+        for line in self.data[:self.eoo]:
+            if self.hamiltonian['shell_type'] is None:
+                match = re.match(
+                    r'^\s*TYPE OF CALCULATION\s*:\s*(.+?)\s*$', line)
+                if match:
+                    self.hamiltonian['shell_type'] = match.group(1)
+                    self.hamiltonian['spin_polarized'] = \
+                        'UNRESTRICTED' in match.group(1).upper()
+                    continue
+
+            if self.hamiltonian['method'] is None:
+                if re.match(r'^\s*KOHN-SHAM HAMILTONIAN', line):
+                    self.hamiltonian['method'] = 'DFT'
+                    continue
+                if re.match(r'^\s*HARTREE-FOCK HAMILTONIAN', line):
+                    self.hamiltonian['method'] = 'Hartree-Fock'
+                    continue
+
+            # (EXCHANGE)[CORRELATION] FUNCTIONAL:(BECKE 88)[LEE-YANG-PARR];
+            # a functional with only one of the two parts prints just that one.
+            if 'FUNCTIONAL:' in line:
+                match = re.search(r'FUNCTIONAL:\(([^)]*)\)', line)
+                if match and self.hamiltonian['exchange'] is None:
+                    self.hamiltonian['exchange'] = match.group(1).strip()
+                match = re.search(r'FUNCTIONAL:.*\[([^\]]*)\]', line)
+                if match and self.hamiltonian['correlation'] is None:
+                    self.hamiltonian['correlation'] = match.group(1).strip()
+                continue
+
+            if self.hamiltonian['hybrid_exchange'] is None:
+                match = re.search(
+                    r'PERCENTAGE OF FOCK EXCHANGE\s+([\d.]+)', line)
+                if match:
+                    self.hamiltonian['hybrid_exchange'] = float(match.group(1))
+                    continue
+
+            if self.hamiltonian['dispersion'] is None:
+                match = re.search(
+                    r'(DFT-D3\(BJ\)|DFT-D3|DFT-D2|GRIMME DISPERSION)', line)
+                if match:
+                    self.hamiltonian['dispersion'] = match.group(1)
+
+        return self.hamiltonian
+
+    def get_kpoint_info(self):
+        """
+        Get the reciprocal-space sampling of the SCF.
+
+        Returns:
+            self.kpoint_info (dict): New attribute. Keys:
+
+                * 'shrink' (list[int]|None): Monkhorst-Pack shrinking factors.
+                * 'n_kpoints_ibz' (int|None): k points in the irreducible
+                  Brillouin zone.
+                * 'gilat_shrink' (int|None): shrinking factor of the Gilat net.
+                * 'n_kpoints_gilat' (int|None): k points of the Gilat net.
+
+                All None for a molecule, which has no k point sampling.
+        """
+        import re
+
+        self.kpoint_info = {
+            'shrink': None, 'n_kpoints_ibz': None,
+            'gilat_shrink': None, 'n_kpoints_gilat': None,
+        }
+
+        for line in self.data[:self.eoo]:
+            match = re.match(
+                r'^\s*SHRINK\. FACT\.\(MONKH\.\)((?:\s+\d+)+)\s+'
+                r'NUMBER OF K POINTS IN THE IBZ\s+(\d+)', line)
+            if match:
+                self.kpoint_info['shrink'] = [
+                    int(f) for f in match.group(1).split()]
+                self.kpoint_info['n_kpoints_ibz'] = int(match.group(2))
+                continue
+
+            match = re.match(
+                r'^\s*SHRINKING FACTOR\(GILAT NET\)\s+(\d+)\s+'
+                r'NUMBER OF K POINTS\(GILAT NET\)\s+(\d+)', line)
+            if match:
+                self.kpoint_info['gilat_shrink'] = int(match.group(1))
+                self.kpoint_info['n_kpoints_gilat'] = int(match.group(2))
+                # Both lines are printed together, once, before the SCF.
+                break
+
+        return self.kpoint_info
+
+    def get_basis_info(self):
+        """
+        Get the size of the basis set and of the system, as CRYSTAL counts it.
+
+        Returns:
+            self.basis_info (dict): New attribute, with None for anything the
+            output does not report. Keys: 'n_atoms', 'n_shells', 'n_ao',
+            'n_electrons', 'n_core_electrons', 'n_symmops' (all int|None).
+        """
+        import re
+
+        self.basis_info = {
+            'n_atoms': None, 'n_shells': None, 'n_ao': None,
+            'n_electrons': None, 'n_core_electrons': None, 'n_symmops': None,
+        }
+        patterns = {
+            'n_atoms': r'^\s*N\. OF ATOMS PER CELL\s+(\d+)',
+            'n_shells': r'^\s*NUMBER OF SHELLS\s+(\d+)',
+            'n_ao': r'^\s*NUMBER OF AO\s+(\d+)',
+            'n_electrons': r'^\s*N\. OF ELECTRONS PER CELL\s+(\d+)',
+            'n_core_electrons': r'^\s*CORE ELECTRONS PER CELL\s+(\d+)',
+            'n_symmops': r'^\s*N\. OF SYMMETRY OPERATORS\s+(\d+)',
+        }
+
+        for line in self.data[:self.eoo]:
+            for key, pattern in patterns.items():
+                if self.basis_info[key] is not None:
+                    continue
+                match = re.match(pattern, line)
+                if match:
+                    self.basis_info[key] = int(match.group(1))
+                    break
+            if all(v is not None for v in self.basis_info.values()):
+                break
+
+        return self.basis_info
+
+    def get_scf_settings(self):
+        """
+        Get the SCF thresholds and the DFT integration grid size.
+
+        Returns:
+            self.scf_settings (dict): New attribute. Keys:
+
+                * 'max_cycles' (int|None): SCF cycle limit.
+                * 'toldee' (int|None): n in the 10**-n energy convergence
+                  threshold.
+                * 'tolinteg' (list[int]|None): the five truncation tolerances
+                  T1-T5, as positive exponents (CRYSTAL prints them 10**-n but
+                  signs the columns inconsistently).
+                * 'grid_points' (int|None): points in the DFT integration grid.
+                  None for Hartree-Fock.
+        """
+        import re
+
+        self.scf_settings = {
+            'max_cycles': None, 'toldee': None,
+            'tolinteg': None, 'grid_points': None,
+        }
+        tolinteg = {}
+
+        for line in self.data[:self.eoo]:
+            if self.scf_settings['max_cycles'] is None:
+                match = re.match(r'^\s*MAX NUMBER OF SCF CYCLES\s+(\d+)', line)
+                if match:
+                    self.scf_settings['max_cycles'] = int(match.group(1))
+
+            if self.scf_settings['toldee'] is None:
+                match = re.search(
+                    r'CONVERGENCE ON ENERGY\s+10\*\*\s*-\s*(\d+)', line)
+                if match:
+                    self.scf_settings['toldee'] = int(match.group(1))
+
+            if len(tolinteg) < 5:
+                match = re.search(r'\(T(\d)\)\s+10\*\*\s*(-?\d+)', line)
+                if match:
+                    tolinteg[int(match.group(1))] = abs(int(match.group(2)))
+
+            if self.scf_settings['grid_points'] is None:
+                match = re.match(r'^\s*SIZE OF GRID=\s*(\d+)', line)
+                if match:
+                    self.scf_settings['grid_points'] = int(match.group(1))
+
+        if len(tolinteg) == 5:
+            self.scf_settings['tolinteg'] = [tolinteg[i] for i in range(1, 6)]
+
+        return self.scf_settings
+
+    def get_run_type(self):
+        """
+        Get the task(s) the run performed, as CRYSTAL keywords.
+
+        Two sources are used, and a task found by either is reported once:
+
+        * the section banners CRYSTAL prints when it starts a task;
+        * the input keywords themselves, when the deck was echoed into the
+          output (many job scripts do, and it is the only way to see tasks that
+          print no banner of their own, such as ``QHA`` and ``SCANMODE``).
+
+        Nothing is inferred beyond those, so a run whose task cannot be
+        identified returns an empty list rather than a guess.
+
+        Returns:
+            self.run_type (list[str]): New attribute, in the order the tasks
+            run rather than the order they appear in the file. Any of
+            'OPTGEOM', 'EOS', 'ELASTCON', 'FREQCALC', 'DISPERSI', 'QHA',
+            'SCANMODE', 'ANHARM', 'ANHAPES', 'VSCF', 'VCI', 'VPT2', 'CPHF'.
+        """
+        import re
+
+        # Task keywords, in the order the calculation performs them. Also the
+        # keywords looked for on a line of their own — both in an echoed deck
+        # and as the labels CRYSTAL prints above anharmonic spectra.
+        keywords = ('OPTGEOM', 'EOS', 'ELASTCON', 'FREQCALC', 'DISPERSI',
+                    'QHA', 'SCANMODE', 'ANHARM', 'ANHAPES', 'VSCF', 'VCI',
+                    'VPT2', 'CPHF')
+        # Banners: what the task prints once it actually starts.
+        markers = {
+            'OPTGEOM': r'OPT END|COORDINATE AND CELL OPTIMIZATION|'
+                       r'\*\*\*\* NEW DEFAULT \*\*\*\* OPTGEOM',
+            'FREQCALC': r'\+\+\+\s*SYMMETRY ADAPTION OF VIBRATIONAL MODES',
+            'DISPERSI': r'DISPERSION K POINT NUMBER',
+            'ELASTCON': r'^\s*ELAELAELA',
+            'EOS': r'^\s*EOSEOSEOS',
+            'ANHAPES': r'SCANPES|CALCULATION OF CUBIC AND QUARTIC TERMS',
+            'VCI': r'VIBRATIONAL\s+CONFIGURATION\s+INTERACTION\s+\(VCI\)|'
+                   r'VCI PERFORMED',
+            'CPHF': r'COUPLED-PERTURBED (KOHN-SHAM|HARTREE-FOCK)',
+        }
+        standalone = re.compile(r'^\s*([A-Z0-9]+)\s*$')
+        found = set()
+
+        for line in self.data[:self.eoo]:
+            match = standalone.match(line)
+            if match and match.group(1) in keywords:
+                found.add(match.group(1))
+                continue
+            for name, pattern in markers.items():
+                if name not in found and re.search(pattern, line):
+                    found.add(name)
+
+        self.run_type = [k for k in keywords if k in found]
+        return self.run_type
+
+    def get_calculation_info(self):
+        """
+        Summarise how the calculation was set up, in one call.
+
+        Convenience wrapper over :func:`get_code_version`,
+        :func:`get_hamiltonian`, :func:`get_kpoint_info`,
+        :func:`get_basis_info`, :func:`get_scf_settings` and
+        :func:`get_run_type` — useful for reporting a run at a glance. Each
+        part is collected independently, so one unparsable section leaves its
+        keys None instead of failing the whole summary.
+
+        Returns:
+            self.calculation_info (dict): New attribute. The union of the keys
+            documented by those methods, plus 'code', 'version', 'run_type'
+            and 'terminated' (bool, whether the run ended normally).
+        """
+        info = {'terminated': self.terminated}
+
+        for getter in (self.get_code_version, self.get_hamiltonian,
+                       self.get_kpoint_info, self.get_basis_info,
+                       self.get_scf_settings):
+            try:
+                info.update(getter())
+            except Exception:
+                pass
+
+        try:
+            info['run_type'] = self.get_run_type()
+        except Exception:
+            info['run_type'] = []
+
+        self.calculation_info = info
+        return self.calculation_info
+
     #### Geometry ####
 
     def get_dimensionality(self):
@@ -1743,6 +2073,141 @@ class Crystal_output:
 
         return self
 
+    def get_ADP(self):
+        """
+        Extract the atomic displacement parameters (ADP) from a FREQCALC run.
+
+        Reads every block CRYSTAL prints under the ``ADP`` keyword: one per
+        temperature requested by ``TEMPERAT``, each holding the ADP tensor, the
+        principal values of the displacement ellipsoid and the rotation tensor
+        carrying the cartesian axes onto the principal ones, for every atom in
+        the cell.
+
+        The tensors are in the cartesian frame. Converting them to the
+        crystallographic basis a CIF wants is a separate step, and needs the
+        cell.
+
+        Returns:
+            self (Crystal_output): New attributes listed below. All empty
+            arrays when the output has no ADP section.
+            self.adp_temperature (np.array): ntemp temperatures. Unit: K.
+            self.adp_active_modes (np.array): ntemp counts of the modes
+                included at each temperature.
+            self.adp (np.array): ntemp\\*natom\\*3\\*3 ADP tensors, cartesian.
+                Unit: Angstrom^2.
+            self.adp_principal (np.array): ntemp\\*natom\\*3 principal values of
+                each displacement ellipsoid. Unit: Angstrom^2.
+            self.adp_axes (np.array): ntemp\\*natom\\*3\\*3 rotation tensors,
+                whose rows are the ellipsoid's principal axes in cartesian
+                coordinates.
+        """
+        import re
+
+        import numpy as np
+
+        from CRYSTALClear.units import au_to_angstrom
+
+        banner = re.compile(r'^\s*ATOMIC DISPLACEMENT PARAMETERS \(ADP\)')
+        temperature = re.compile(r'^\s*TEMPERATURE\s*=\s*(-?\d+\.?\d*)\s*K')
+        active = re.compile(r'^\s*NUMBER OF ACTIVE MODES\s*=\s*(\d+)')
+        tensor = re.compile(r'^\s*ADP TENSOR')
+        principal = re.compile(r'^\s*PRINCIPAL AXES OF THE ELLIPSOID')
+        rotation = re.compile(r'^\s*ROTATION TENSOR')
+        separator = re.compile(r'^\s*\*{10,}\s*$')
+
+        # Each tensor row is "<3 floats in a.u.^2> <3 integers in 10^-4 ang^2>":
+        # the same numbers twice over, so only the leading three are read.
+        def read_rows(start, count):
+            """The first 3 numbers of the next `count` non-blank lines."""
+            rows = []
+            index = start + 1
+            while len(rows) < count and index < len(self.data):
+                if self.data[index].strip():
+                    try:
+                        rows.append([float(v)
+                                     for v in self.data[index].split()[:3]])
+                    except ValueError:  # ran past the block into prose
+                        return None
+                index += 1
+            return rows if len(rows) == count else None
+
+        bohr_squared = au_to_angstrom(1.) ** 2
+
+        temperatures = []
+        active_modes = []
+        tensors = []
+        principals = []
+        axes = []
+
+        index = 0
+        while index < len(self.data):
+            if not banner.match(self.data[index]):
+                index += 1
+                continue
+
+            block_t = None
+            block_modes = 0
+            block_tensors = []
+            block_principals = []
+            block_axes = []
+
+            index += 1
+            while index < len(self.data):
+                line = self.data[index]
+                # The thermodynamic section that follows closes the block.
+                if separator.match(line) or banner.match(line):
+                    break
+
+                match = temperature.match(line)
+                if match:
+                    block_t = float(match.group(1))
+                match = active.match(line)
+                if match:
+                    block_modes = int(match.group(1))
+
+                if tensor.match(line):
+                    rows = read_rows(index, 3)
+                    if rows is not None:
+                        block_tensors.append(rows)
+                elif principal.match(line):
+                    rows = read_rows(index, 1)
+                    if rows is not None:
+                        block_principals.append(rows[0])
+                elif rotation.match(line):
+                    rows = read_rows(index, 3)
+                    if rows is not None:
+                        block_axes.append(rows)
+                index += 1
+
+            # An interrupted run can leave an atom with only part of its data:
+            # keep the atoms that are complete rather than dropping the block.
+            natom = min(len(block_tensors), len(block_principals),
+                        len(block_axes))
+            if block_t is None or natom == 0:
+                continue
+            temperatures.append(block_t)
+            active_modes.append(block_modes)
+            tensors.append(block_tensors[:natom])
+            principals.append(block_principals[:natom])
+            axes.append(block_axes[:natom])
+
+        # Temperatures reporting different atom counts (a truncated last block)
+        # would build a ragged array; keep what every block has.
+        if temperatures:
+            natom = min(len(block) for block in tensors)
+            tensors = [block[:natom] for block in tensors]
+            principals = [block[:natom] for block in principals]
+            axes = [block[:natom] for block in axes]
+
+        self.adp_temperature = np.array(temperatures, dtype=float)
+        self.adp_active_modes = np.array(active_modes, dtype=int)
+        # Tensor floats are bohr^2; the principal values already are ang^2.
+        self.adp = np.array(tensors, dtype=float) * bohr_squared
+        self.adp_principal = np.array(principals, dtype=float)
+        self.adp_axes = np.array(axes, dtype=float)
+
+        return self
+
     def get_anh_const(self):
         """
         Extract anharmonic terms of the PES (ANHAPES).
@@ -1818,11 +2283,29 @@ class Crystal_output:
 
         Returns:
             self (Crystal_output): New attributes listed below.
-            self.VCI_label(np.array)
-            self.VCI_state(np.array)
-            self.VCI_energy(np.array)
-            self.VCI_nconfs(int)
-            self.VCI_list_conf(np.array)
+            self.VCI_label(np.array): Label of each state, as printed by
+                CRYSTAL. It restarts from 1 in every symmetry block, so it
+                identifies a state only together with self.VCI_irrep.
+            self.VCI_state(np.array): 3D array of the printed contributions to
+                each state (axis 0), holding their configuration index (axis 1
+                index 0) and the corresponding VCI coefficient (axis 1 index
+                1). States printing fewer contributions than the longest one
+                are padded with a null configuration index.
+            self.VCI_energy(np.array): Energy of each state relative to the
+                zero point energy, in cm^-1.
+            self.VCI_nconfs(int): Total number of configurations.
+            self.VCI_list_conf(np.array): 2D array of the occupation number
+                vector of every configuration.
+            self.VCI_basis(str): Zeroth-order basis the VCI expansion is built
+                on, either 'HO' (VCI@HO) or 'VSCF' (VCI@VSCF).
+            self.VCI_zpe(float): Vibrational zero point energy in cm^-1.
+            self.VCI_irrep(np.array): Irrep the VCI matrix block each state
+                comes from, 0 when symmetry is not exploited.
+            self.VCI_sym_conf(dict): Configuration list of each irrep, keyed by
+                irrep. The configuration indices held by self.VCI_state are
+                local to these lists, not to self.VCI_list_conf, whenever the
+                VCI matrix is block-diagonalised. Empty dictionary when
+                symmetry is not exploited.
         """
 
         import re
@@ -1836,6 +2319,14 @@ class Crystal_output:
         state2 = []
         ONVs = []
 
+        sym_save = False
+        irrep = 0
+        irreps = []
+        sym_ONVs = {}
+
+        self.VCI_basis = None
+        self.VCI_zpe = None
+
         # Get harmonic freqs -->
         self.get_phonon()
         # <--
@@ -1846,63 +2337,116 @@ class Crystal_output:
             if re.match(r'^\s*\*\s*VIBRATIONAL\s+CONFIGURATION\s+INTERACTION\s+\(VCI\)\s*\*$', line):
                 save = True
 
-            if re.match(r'\s* VCI PERFORMED', line):
+            if re.match(r'\s*VCI PERFORMED', line):
                 save = False
+                # Both the current labels, '... HARMONIC BASIS (VCI-HO)' and
+                # '... VSCF FUNDAMENTAL BASIS (VCI-VSCF)', and the older ones,
+                # '... BASIS OF THE HARMONIC EIGENFUNCTIONS' and '... BASIS OF
+                # THE VSCF FUNDAMENTAL STATE (VIRTUAL VCI)', are recognised.
+                if 'VSCF' in line:
+                    self.VCI_basis = 'VSCF'
+                else:
+                    self.VCI_basis = 'HO'
 
-            if (re.match(r'^\s*\d', line) and save):
-                # ONVs.append(line.split()[2:])  # only for taglia e cuci
-                ONVs.append(line.split()[3:])  # this is the correct one
+            if re.match(r'\s*ZPE\s*=', line):
+                self.VCI_zpe = float(re.search(r'ZPE\s*=\s*(-?\d+\.?\d*)',
+                                               line).group(1))
 
-            #################################
-            # Remember to update VCI print in CRYSTAL !!!!!!
-            #################################
+            # Match the shape of a configuration line, i.e. its indices
+            # followed by the parenthesised occupation number vector, rather
+            # than any line starting with a digit: some versions of CRYSTAL
+            # print debugging output in the middle of the list.
+            if (save and re.match(r'^\s*\d+(\s+\d+)?\s+\(', line)):
+                fields = line.split()
+                ONVs.append(fields[fields.index('(') + 1:])
 
-            if re.match(r'\s*TOTAL NUMBER OF CONFIGURATIONS', line):
-                self.VCI_nconfs = (int(line.split()[4]))
+            # When symmetry is exploited the VCI matrix is block-diagonalised,
+            # each irrep printing its own configuration list and its own set of
+            # states. The configuration indices of a state then refer to the
+            # list of its own irrep, not to the global one.
+            if re.match(r'\s*CONSTRUCTION OF VCI MATRIX FOR IRREP', line):
+                irrep = int(line.split()[-1])
+                sym_ONVs[irrep] = []
 
-            if re.match(r'\s* VCI STATE \(', line):
-                nstate += 1
-                label.append(int(line.split()[3].replace(")", "")))
-                energy.append((float(line.split()[7])))
-                p = 3
-                loop = True
+            if re.match(r'\s*CONFIGURATIONS WITH THIS SYMMETRY ARE', line):
+                sym_save = True
+
+            if re.match(r'\s*VCI ANHARMONIC VIBRATIONAL STATES', line):
+                sym_save = False
+
+            if sym_save and re.match(r'^\s*\d+(\s+\d+)?\s+\(', line):
+                fields = line.split()
+                sym_ONVs[irrep].append(
+                    [int(x.replace(')', '').replace(',', ''))
+                     for x in fields[fields.index('(') + 1:]])
+
+            if re.match(r'\s*VCI STATE \(', line):
+                # Look the block of printed contributions up rather than
+                # assuming a fixed offset: the number of blank lines preceding
+                # it varies with the version of CRYSTAL.
+                p = 1
+                while (i + p < len(self.data)
+                       and not re.match(r'\s*CONFs', self.data[i+p])
+                       and not re.match(r'\s*VCI STATE \(', self.data[i+p])):
+                    p += 1
+
+                if (i + p == len(self.data)
+                        or not re.match(r'\s*CONFs', self.data[i+p])):
+                    continue  # truncated output, leave the state out
+
+                # A state holds from 4 to 16 contributions, printed a few per
+                # line, so read the whole block and sort its lines by tag
+                # instead of relying on either count.
                 confs_tmp = []
                 coeffs_tmp = []
-                while loop:
-                    confs_tmp = confs_tmp + self.data[i+p].split()[1:]
-                    coeffs_tmp = coeffs_tmp + self.data[i+p+1].split()[1:]
-                    if (re.match(r'\s*CONFs', self.data[i+p+2])):
-                        loop = True
-                        p += 2
+                while i + p < len(self.data):
+                    if re.match(r'\s*CONFs', self.data[i+p]):
+                        confs_tmp = confs_tmp + self.data[i+p].split()[1:]
+                    elif re.match(r'\s*COEFs', self.data[i+p]):
+                        coeffs_tmp = coeffs_tmp + self.data[i+p].split()[1:]
                     else:
-                        loop = False
                         break
+                    p += 1
 
-                confs = [int(x) for x in confs_tmp]
-                coeffs = [float(x) for x in coeffs_tmp]
-
-                state1.append(confs)
-                state2.append(coeffs)
+                nstate += 1
+                irreps.append(irrep)
+                label.append(int(line.split()[3].replace(")", "")))
+                energy.append((float(line.split()[7])))
+                state1.append([int(x) for x in confs_tmp])
+                state2.append([float(x) for x in coeffs_tmp])
         # <--
 
         # Parsing of ONVs -->
+        self.VCI_nconfs = len(ONVs)
+
         nmodes = len(ONVs[0])
+        if any(len(o) != nmodes for o in ONVs):
+            raise Exception("EXITING: the VCI configuration list of %s could "
+                            "not be parsed, its entries not all spanning the "
+                            "same %d modes." % (self.name, nmodes))
         for i in range(self.VCI_nconfs):
             for m in range(nmodes):
                 ONVs[i][m] = int(ONVs[i][m].replace(')', '').replace(',', ''))
-                pass
         self.VCI_list_conf = np.array(ONVs)
         # <--
 
-        A = np.zeros((nstate, 2, len(confs)), dtype=float)
+        # Per-irrep configuration lists, empty when symmetry is not exploited
+        self.VCI_sym_conf = {k: np.array(v) for k, v in sym_ONVs.items() if v}
+
+        # States need not all print the same number of contributions: pad the
+        # short ones with a null configuration index, which plots skip.
+        ncontribs = max(len(c) for c in state1)
+
+        A = np.zeros((nstate, 2, ncontribs), dtype=float)
 
         for i in range(nstate):
-            A[i, 0] = np.array(state1[i])
-            A[i, 1] = np.array(state2[i])
+            A[i, 0, :len(state1[i])] = np.array(state1[i])
+            A[i, 1, :len(state2[i])] = np.array(state2[i])
 
         self.VCI_label = np.array(label)
         self.VCI_energy = np.array(energy)
         self.VCI_state = A
+        self.VCI_irrep = np.array(irreps)
 
         return self
 
@@ -2612,7 +3156,28 @@ class Crystal_output:
     # ANSCAN+DWELL
     def get_anscan(self, anscanwf):
         """
-        Work in progress for ANSCAN stuff (in development).
+        Extracts the results of an ANSCAN run: the potential scanned along one
+        normal mode, its Taylor expansion, the anharmonic vibrational states
+        and their wavefunctions.
+
+        Everything is stored in the dimensionless normal coordinate xi that
+        ANSCAN itself uses, i.e. the [DISPLAC] column of the output, which
+        measures the displacement in units of the classical amplitude at the
+        quantum ground state energy.
+
+        Args:
+            anscanwf (str): Path to the ANSCANWF.DAT file of the run.
+
+        Returns:
+            self.rangescan (list[float]): [first, last] displacement of the scan.
+            self.displac (np.array): Displacements the scan was run on.
+            self.anhpot (np.array): Scanned potential, cm^-1.
+            self.harmpot (np.array): Harmonic potential, cm^-1.
+            self.energy (list[float]): Anharmonic vibrational states, cm^-1. The first entry is the ground state (the ZPE printed by CRYSTAL).
+            self.force_const (list[float]): Derivatives of the potential with respect to xi, cm^-1, ordered by (and indexed by) their order.
+            self.harm_freq (float): Harmonic frequency of the scanned mode, cm^-1, negative if the mode is imaginary.
+            self.wf (np.array): Expansion coefficients of the anharmonic wavefunctions over the harmonic basis, (n_basis, n_states).
+            self.alpha (float): ALPHA constant printed in ANSCANWF.DAT.
         """
 
         import re
@@ -2638,33 +3203,40 @@ class Crystal_output:
                 self.rangescan = [first*step, last*step]
             if re.match(r'\s*\[DISPLAC\]\s*\[\s*SCAN POTENTIAL\s*\]', line):
                 V = np.zeros([ndispl+1, 2])
+                D = np.zeros(ndispl+1)
                 for k in range(ndispl+1):
+                    D[k] = float(self.data[i+2+k].split()[0])
+                    # The central point carries no energy, it is the reference
                     if (re.match(r'^\s+0.0000*', self.data[i+2+k])):
                         continue
                     V[k, 0] = float(self.data[i+2+k].split()[2])
                     V[k, 1] = float(self.data[i+2+k].split()[4])
+                self.displac = D
                 self.anhpot = V[:, 0]
                 self.harmpot = V[:, 1]
                 # Save index of anscan mode
                 strtmp = self.data[i-1].split()[1]
                 strtmp = strtmp[:strtmp.find()]
                 anhmode = int(strtmp)
-            if re.match(r'\s*ANHARMONIC VIBRATIONAL STATES', self.data[i-3]):
-                storeE = True
+            if (i > 2):
+                if re.match(r'\s*ANHARMONIC VIBRATIONAL STATES', self.data[i-3]):
+                    storeE = True
             if re.match(r'\s*POTENTIAL ENERGY DERIVATIVES', line):
                 storeE = False
             if (storeE and (len(self.data[i].split()) != 0)):
                 self.energy.append(float(self.data[i].split()[2]))
-            if re.match(r'\s*POTENTIAL ENERGY DERIVATIVES', self.data[i-3]):
-                storeFC = True
+            if (i > 2):
+                if re.match(r'\s*POTENTIAL ENERGY DERIVATIVES', self.data[i-3]):
+                    storeFC = True
             if (storeFC and (re.match(r'^(?!\s*\d)', line))):
                 storeFC = False
             if (storeFC):
                 self.force_const.append(float(line.split()[2]))
 
-        # Call get_phonon() method and save harmonic freq
+        # Call get_phonon() method and save harmonic freq. The sign is kept,
+        # so that imaginary modes come out negative as they do in the output.
         self.get_phonon(rm_imaginary=False)
-        self.harm_freq = self.frequency[0, anhmode-1]*33.333333
+        self.harm_freq = units.thz_to_cm(self.frequency[0, anhmode-1])
 
         # Read ANSCANWF.DAT
         try:
@@ -2675,10 +3247,11 @@ class Crystal_output:
             raise FileNotFoundError(
                 'EXITING: a .anscanwf file needs to be specified')
 
-        self.wf = np.zeros([len(self.energy), 10])
+        # One row per harmonic basis function, one column per anharmonic state
+        coeff = []
         self.alpha = None
 
-        for i, line in enumerate(data):
+        for line in data:
             if re.match(r'^\s*$', line):
                 break
             if re.match(r'.ALP.*', line):
@@ -2686,8 +3259,9 @@ class Crystal_output:
                 break
             if re.match(r'.ANH.*', line):
                 continue
-            for j in range(10):
-                self.wf[i-1, j] = float(line.split()[j])
+            coeff.append([float(x) for x in line.split()])
+
+        self.wf = np.array(coeff)
 
     # ANSCAN+DWELL
 
